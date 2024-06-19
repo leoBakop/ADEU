@@ -38,7 +38,7 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, per, psne, **kwargs):
+def main(seed, horizon, timesteps, domain, per, **kwargs):
     wandb_session(domain, seed, name=f'naf_{domain}_per_{per}_psne_{psne}_seed_{seed}', code=code_creation(per = per, psne = psne))
     env = gym.make(domain, **kwargs)
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
@@ -48,7 +48,6 @@ def main(seed, horizon, timesteps, domain, per, psne, **kwargs):
     terminate_psne = int(0.5*horizon)
     head_start_psne = int(0.11*horizon)
     
-    sigma = 0
 
     seed = seed
     timesteps = timesteps
@@ -96,13 +95,13 @@ def main(seed, horizon, timesteps, domain, per, psne, **kwargs):
                     adaptive_eploration=True
                     )
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards = \
-        run(**kwargs, seed = seed, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, per = per, psne = psne, terminate_psne = terminate_psne, eval_env = eval_env, head_start_psne=head_start_psne) #the headstart was 200
+        run(**kwargs, seed = seed, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, per = per, terminate_psne = terminate_psne, eval_env = eval_env, head_start_psne=head_start_psne) #the headstart was 200
     store(f"./experiments/{domain}/per_{per}_psne_{psne}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards)    
     env.close()
     return mean_evaluation_rewards
 
 
-def run(env, eval_env, domain,  seed, horizon = 10_000, agent:Agent = None, timesteps = 50, per=False, psne = False, terminate_psne = 4_000, head_start_psne = 200, **kwargs):
+def run(env, eval_env, domain,  seed, horizon = 10_000, agent:Agent = None, timesteps = 50, per=False, terminate_psne = 4_000, head_start_psne = 200, **kwargs):
     mean_reward = np.zeros(horizon)
     percentage = 1
     mean_evaluation_rewards = np.zeros(int(percentage*horizon/100)+100)
@@ -111,26 +110,12 @@ def run(env, eval_env, domain,  seed, horizon = 10_000, agent:Agent = None, time
     rewards = np.zeros(horizon*timesteps)
     evaluation_rewards = np.zeros((int(percentage*horizon/100)+100, timesteps))
     evaluated_episodes = 0
-    first_time_psne = psne
     if per: b = agent.beta
-    if psne: 
-        eps_psne = np.linspace(0.5,0.05, terminate_psne)
+    
     
 
     for episode in tqdm(range(horizon)):
 
-        if psne:
-            wandb.log({domain+"_agents_sigma": agent.sigma})
-            if episode < head_start_psne and first_time_psne: 
-                tradeoff = 0
-            else:
-                if first_time_psne:
-                    print("---------------------------PSNE just started -----------------------") 
-                    first_time_psne = False
-                tradeoff = eps_psne[episode - head_start_psne] if episode < terminate_psne+ head_start_psne else eps_psne[-1]
-
-            agent.update_psne_tradeoff(tradeoff)
-            agent.add_noise_to_nn()
 
         if episode % int(round(100/percentage)) == 0:
             tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, seed = seed, episode = episode, per=per, psne=psne)
@@ -271,4 +256,4 @@ if __name__ == '__main__':
     print(f"{domain}+per_{per}+psne_{psne}")
 
     for s in range(2,seeds):
-        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, per=per, psne=psne)
+        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, per=per)
