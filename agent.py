@@ -141,10 +141,14 @@ class Agent:
         self.rnd_target.train()
 
         variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed)
+        self.variance = variance #self.variance servs as a buffer
         dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
         expl_action = dist.sample()
         return expl_action
     
+
+    def get_variance(self):
+        return self.variance
 
     def get_clear_action(self,state):
         self.model.set_c(self.evaluation_c)
