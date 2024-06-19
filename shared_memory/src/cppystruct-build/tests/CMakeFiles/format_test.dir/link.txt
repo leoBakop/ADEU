@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/format_test.dir/format_test.cpp.o -o format_test  libtest_catch.a 

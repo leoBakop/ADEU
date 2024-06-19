@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/CMakeFiles/cppystruct"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/CMakeFiles/cppystruct.rule"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/CMakeFiles/cppystruct-complete.rule"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/src/cppystruct-stamp/cppystruct-build.rule"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/src/cppystruct-stamp/cppystruct-configure.rule"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/src/cppystruct-stamp/cppystruct-download.rule"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/src/cppystruct-stamp/cppystruct-install.rule"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/src/cppystruct-stamp/cppystruct-mkdir.rule"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/src/cppystruct-stamp/cppystruct-patch.rule"
+		},
+		{
+			"file" : "/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/src/cppystruct-stamp/cppystruct-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"cppystruct"
+		],
+		"name" : "cppystruct"
+	}
+}

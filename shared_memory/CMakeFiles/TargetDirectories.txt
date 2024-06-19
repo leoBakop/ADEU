@@ -1,0 +1,4 @@
+/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/CMakeFiles/shared_memory_cpp.dir
+/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/CMakeFiles/edit_cache.dir
+/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/CMakeFiles/rebuild_cache.dir
+/home/iason/sumo_traffic_fluid/sumo_env/shared_memory/CMakeFiles/shared_memory_cpp_autogen.dir

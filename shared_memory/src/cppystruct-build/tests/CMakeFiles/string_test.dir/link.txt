@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/string_test.dir/string_test.cpp.o -o string_test  libtest_catch.a 

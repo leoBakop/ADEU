@@ -1,0 +1,12 @@
+# Target labels
+ catch
+# Source files and their labels
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/tests/CMakeFiles/catch
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/tests/CMakeFiles/catch.rule
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/tests/CMakeFiles/catch-complete.rule
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/catch/src/catch-stamp/catch-build.rule
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/catch/src/catch-stamp/catch-configure.rule
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/catch/src/catch-stamp/catch-download.rule
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/catch/src/catch-stamp/catch-install.rule
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/catch/src/catch-stamp/catch-mkdir.rule
+/home/iason/shared_memory/shared-memory-pycpp-example-master_tweaked/src/cppystruct-build/catch/src/catch-stamp/catch-patch.rule
