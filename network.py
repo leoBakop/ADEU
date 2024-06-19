@@ -172,6 +172,7 @@ class RND_Network(nn.Module):
         self.device = device
         self.max_speed = max_speed
         # Define the layers
+        hidden_size *= 2
         self.fc1 = nn.Linear(input_size, hidden_size)  
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.output = nn.Linear(hidden_size, 1)

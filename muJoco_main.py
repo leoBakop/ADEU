@@ -213,7 +213,7 @@ def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, seed, episode,
 def make_evaluation_env(dom, iterations, episode, per, psne, **kwargs):
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
     if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}_train_freq_1/_per_{per}_psne_{psne}', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
+    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/2', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards):
@@ -248,7 +248,7 @@ if __name__ == '__main__':
     domain = args.dom
     timesteps = args.steps
     max_episode_steps = timesteps
-    horizon = int(5_000_000 / timesteps)
+    horizon = int(15_000_000 / timesteps)
     if timesteps < 200:
         horizon = int(horizon/10)
 

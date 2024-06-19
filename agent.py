@@ -142,6 +142,7 @@ class Agent:
 
         variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed)
         self.variance = variance #self.variance servs as a buffer
+        if variance == 0: return action
         dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
         expl_action = dist.sample()
         return expl_action
