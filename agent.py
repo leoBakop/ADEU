@@ -149,7 +149,8 @@ class Agent:
     
 
     def get_variance(self):
-        return self.variance
+        if self.adaptive_exploration:return self.variance
+        return 0
 
     def get_clear_action(self,state):
         self.model.set_c(self.evaluation_c)
@@ -185,8 +186,7 @@ class Agent:
                                                                                 target_network = self.target_model,
                                                                                 optim = self.optimizer)
                 Q_losses.append(loss)
-
-            self.train_rnd(experiences)
+            if self.adaptive_exploration: self.train_rnd(experiences)
             return np.mean(Q_losses)
         return 0.0
 
