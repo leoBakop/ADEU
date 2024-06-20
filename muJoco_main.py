@@ -38,8 +38,8 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, per, **kwargs):
-    adaptive_eploration = True
+def main(seed, horizon, timesteps, domain, per, ade, **kwargs):
+    adaptive_eploration = ade
     wandb_session(domain, seed, name=f'naf_{domain}_per_{per}_seed_{seed}', code=code_creation(per = per, adaptive_exploration=adaptive_eploration))
     env = gym.make(domain, **kwargs)
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
@@ -120,7 +120,7 @@ def run(env, eval_env, domain,  seed, horizon = 10_000, agent:Agent = None, time
 
         if episode % int(round(100/percentage)) == 0:
             wandb.log({"timestep with max uncertanty": var_per_episode[episode -1 if episode > 0 else 0]})
-            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, seed = seed, episode = episode, per=per)
+            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, per=per, adaptive_exploration=adaptive_exploration)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
@@ -175,8 +175,8 @@ def wandb_session(domain , seed = 0, name = None, code = 0):
         }
     )
     
-def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, seed, episode, per, iterations,**kwargs):
-    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, per=per, **kwargs)
+def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_exploration, episode, per, iterations,**kwargs):
+    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, per=per, adaptive_exploration = adaptive_exploration**kwargs)
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
     mean_sum_reward = np.zeros(evaluation_episodes)
@@ -209,10 +209,10 @@ def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, seed, episode,
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
 
-def make_evaluation_env(dom, iterations, episode, per, **kwargs):
+def make_evaluation_env(dom, iterations, episode, per, adaptive_exploration, **kwargs):
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
     if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/adaptive_exploration_false', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
+    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/per_{per}_adap_expl_{adaptive_exploration}', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards):
@@ -235,6 +235,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to use PER')
+    parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
     #parser.add_argument('--max_episode_steps', type=int, default = 100)
@@ -244,6 +245,7 @@ if __name__ == '__main__':
     per = args.per
     domain = args.dom
     timesteps = args.steps
+    ade = args.ade
     max_episode_steps = timesteps
     horizon = int(15_000_000 / timesteps)
     if timesteps < 200:
@@ -258,4 +260,4 @@ if __name__ == '__main__':
     print(f"{domain}+per_{per}")
 
     for s in range(seeds):
-        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, per=per)
+        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, per=per, ade = ade)
