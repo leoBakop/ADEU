@@ -91,7 +91,8 @@ def main(seed, horizon, timesteps, domain, per, ade, **kwargs):
                     end_training = end_training,
                     evaluation_c=0,
                     train_frequency=1, #2 dor all in general except cheetha now I am trying for hopper #it was 8 for halg cheetah,
-                    adaptive_eploration=adaptive_eploration
+                    adaptive_eploration=adaptive_eploration,
+                    decay=int(0.5*horizon*timesteps)
                     )
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards = \
         run(**kwargs, seed = seed, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, per = per, eval_env = eval_env, adaptive_exploration = adaptive_eploration) #the headstart was 200

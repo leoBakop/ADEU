@@ -115,7 +115,8 @@ class Agent:
             self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate*10**(0))
             self.rnd_loss = MSELoss()
-            #self.epsilon = np.linspace
+            self.epsilon = np.linspace(.15, .005, decay)
+            self.eps_index = 0
         return
 
 
@@ -145,6 +146,7 @@ class Agent:
         variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed)
         self.variance = variance #self.variance servs as a buffer
         if variance == 0: return action
+        
         if np.random.rand()< .05: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
         dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
         expl_action = dist.sample()
@@ -161,7 +163,8 @@ class Agent:
     
     
     def step(self, state, action, reward, next_state, done, episode, timestep):
-        
+        self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
+        self.eps_index+=1
         self.replay_memory.add(state, action, reward, next_state, done)
         
         if(episode == self.cut_training and not self.exploration_terminated): 
