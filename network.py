@@ -183,5 +183,5 @@ class RND_Network(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.output(x)
-        x = 2**self.max_speed*(self.sigmoid(x)-1)
+        x = 4**self.max_speed*(self.sigmoid(x)-1)
         return x
