@@ -112,17 +112,17 @@ def run(env, eval_env, domain,  seed, horizon = 10_000, agent:Agent = None, time
     rewards = np.zeros(horizon*timesteps)
     evaluation_rewards = np.zeros((int(percentage*horizon/100)+100, timesteps))
     evaluated_episodes = 0
-    var_per_episode = np.zeros(horizon) #stores in which timestep of each episode the agent has the biggest uncertainty
-    
+    arg_var_per_episode = np.zeros(horizon) #stores in which timestep of each episode the agent has the biggest uncertainty
+    var_per_episode = np.zeros(horizon)
     if per: b = agent.beta
     
     
 
     for episode in tqdm(range(horizon)):
         var = np.zeros(timesteps)
-
         if episode % int(round(100/percentage)) == 0:
-            wandb.log({"timestep with max uncertanty": var_per_episode[episode -1 if episode > 0 else 0]})
+            wandb.log({"timestep with max uncertanty": arg_var_per_episode[episode -1 if episode > 0 else 0]})
+            wandb.log({"max uncertanty": var_per_episode[episode -1 if episode > 0 else 0]})
             tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, per=per, adaptive_exploration=adaptive_exploration, use_rnd=use_rnd)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
@@ -158,7 +158,8 @@ def run(env, eval_env, domain,  seed, horizon = 10_000, agent:Agent = None, time
                 mean_reward[episode] = total_reward/(t+1)
                 #wandb.log({domain+"mean_reward": total_reward/(t+1), "loss": loss/(t+1)})
                 break
-        var_per_episode[episode] = np.argmax(var)
+        arg_var_per_episode[episode] = np.argmax(var)
+        var_per_episode[episode] = np.max(var)
     env.close()
     eval_env.close()
     wandb.finish()
