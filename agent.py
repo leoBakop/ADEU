@@ -47,6 +47,9 @@ class Agent:
         print(f"{self.device} is used")
         self.action_size = action_size
 
+        if (use_rnd and adaptive_exploration):
+            print('You should use either adaptive exploration or RND')
+            return
         
         self.model = network.NAF(state_size = inputs_shape, action_size=action_size, layer_size_1 = hidden_layer_1,
                                     layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, seed = seed, device = self.device).to(self.device)
@@ -118,6 +121,7 @@ class Agent:
             self.rnd_loss = MSELoss()
             self.epsilon = np.linspace(.07, .005, decay)
             self.eps_index = 0
+            self.eps = .07
             if self.use_rnd:
                 self.gamma = 0.999
                 self.intr_gamma = 0.99
@@ -159,7 +163,8 @@ class Agent:
 
         variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed)
         self.variance = variance #self.variance servs as a buffer
-
+        return variance
+    
     def get_variance(self):
         if self.adaptive_exploration:return self.variance
         return 0

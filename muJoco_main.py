@@ -38,9 +38,10 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, per, ade, **kwargs):
+def main(seed, horizon, timesteps, domain, per, ade, use_rnd, **kwargs):
     adaptive_exploration = ade
-    wandb_session(domain, seed, name=f'naf_{domain}_per_{per}_seed_{seed}', code=code_creation(per = per, adaptive_exploration=adaptive_exploration))
+
+    wandb_session(domain, seed, name=f'naf use ade: {ade}, use rnd: {use_rnd} seed_{seed}', code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration))
     env = gym.make(domain, **kwargs)
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/{domain}', episode_trigger= lambda x:  x % 1000 == 9, name_prefix=f'{domain}_')
@@ -92,11 +93,12 @@ def main(seed, horizon, timesteps, domain, per, ade, **kwargs):
                     evaluation_c=0,
                     train_frequency=1, #2 dor all in general except cheetha now I am trying for hopper #it was 8 for halg cheetah,
                     adaptive_exploration=adaptive_exploration,
-                    decay=int(0.5*horizon*timesteps)
+                    decay=int(0.5*horizon*timesteps),
+                    use_rnd=use_rnd
                     )
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards = \
         run(**kwargs, seed = seed, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, per = per, eval_env = eval_env, adaptive_exploration = adaptive_exploration) #the headstart was 200
-    store(f"./experiments/{domain}/per_{per}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards)    
+    store(f"./experiments/{domain}/ade_{adaptive_exploration}_rnd{use_rnd}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards)    
     env.close()
     return mean_evaluation_rewards
 
@@ -121,7 +123,7 @@ def run(env, eval_env, domain,  seed, horizon = 10_000, agent:Agent = None, time
 
         if episode % int(round(100/percentage)) == 0:
             wandb.log({"timestep with max uncertanty": var_per_episode[episode -1 if episode > 0 else 0]})
-            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, per=per, adaptive_exploration=adaptive_exploration)
+            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, per=per, adaptive_exploration=adaptive_exploration, use_rnd=use_rnd)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
@@ -166,7 +168,7 @@ def wandb_session(domain , seed = 0, name = None, code = 0):
     # start a new wandb run to track this script
     wandb.init(
         # set the wandb project where this run will be logged
-        project=f"just_checking {domain}",
+        project=f"Adaptive Exploration {domain}",
         name = name,
         # track hyperparameters and run metadata
         config={
@@ -176,8 +178,8 @@ def wandb_session(domain , seed = 0, name = None, code = 0):
         }
     )
     
-def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_exploration, episode, per, iterations,**kwargs):
-    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, per=per, adaptive_exploration = adaptive_exploration, **kwargs)
+def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_exploration, episode, per, iterations, use_rnd,**kwargs):
+    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, per=per, adaptive_exploration = adaptive_exploration, use_rnd = use_rnd, **kwargs)
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
     mean_sum_reward = np.zeros(evaluation_episodes)
@@ -210,10 +212,10 @@ def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_explo
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
 
-def make_evaluation_env(dom, iterations, episode, per, adaptive_exploration, **kwargs):
+def make_evaluation_env(dom, iterations, episode, per, adaptive_exploration, use_rnd, **kwargs):
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
     if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/per_{per}_adap_expl_{adaptive_exploration}/extra_expl/eps/_0', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
+    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/_adap_expl_{adaptive_exploration}_use_rnd{use_rnd}/_eps', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards):
@@ -226,17 +228,17 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
     np.save(path+'/stored_data/evaluation_duration.npy', evaluation_duration)
     np.save(path+'/stored_data/cum_evaluation_rewards.npy', cum_evaluation_rewards)
 
-def code_creation(per=True, adaptive_exploration=True):
-    if per and adaptive_exploration: return 3
-    if not per and adaptive_exploration : return 2
-    if not per and not adaptive_exploration: return 1
-    return -1
+def code_creation(adaptive_exploration=True, use_rnd = False):
+    if adaptive_exploration: return 1
+    if use_rnd: return 2
+    return 0
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to use PER')
     parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
     #parser.add_argument('--max_episode_steps', type=int, default = 100)
@@ -244,6 +246,7 @@ if __name__ == '__main__':
 
     # Access hyperparameters in your script
     per = args.per
+    use_rnd = args.rnd
     domain = args.dom
     timesteps = args.steps
     ade = args.ade
@@ -261,4 +264,4 @@ if __name__ == '__main__':
     print(f"{domain}+per_{per}")
 
     for s in range(seeds):
-        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, per=per, ade = ade)
+        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, per=per, ade = ade, use_rnd=use_rnd)

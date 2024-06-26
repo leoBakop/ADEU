@@ -4,7 +4,7 @@ import random
 import numpy as np 
 from collections import deque
 from operator import itemgetter
-
+import sys
 
 
 class ReplayBuffer:
@@ -27,7 +27,7 @@ class ReplayBuffer:
     def add(self, state, action, reward, next_state, done, intrisic=None):
         """Add a new experience to memory."""
         if self.store_intrisic:
-            assert intrisic is not None
+            if intrisic is None : sys.exit(-1)
             self.memory.append([state, action, reward, next_state, done, intrisic])
             return
         self.memory.append([state, action, reward, next_state, done])
