@@ -35,7 +35,8 @@ class Agent:
                     index = 0,
                     #for the adaptive expploration
                     adaptive_exploration = True,
-                    decay = 1_000_000
+                    decay = 1_000_000,
+                    use_rnd = False,
                  ):
         
         #networks
@@ -102,13 +103,14 @@ class Agent:
                                             self.memory_size, 
                                             self.batch_size, 
                                             self.device,
-                                            seed = seed
+                                            store_intrisic= use_rnd
                                             )
         if (loaded_mem is not None):
             self.replay_memory.memory = loaded_mem
         
         self.adaptive_exploration = adaptive_exploration
-        if self.adaptive_exploration:
+        self.use_rnd = use_rnd
+        if self.adaptive_exploration or self.use_rnd:
             
             self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
@@ -116,6 +118,9 @@ class Agent:
             self.rnd_loss = MSELoss()
             self.epsilon = np.linspace(.07, .005, decay)
             self.eps_index = 0
+            if self.use_rnd:
+                self.gamma = 0.999
+                self.intr_gamma = 0.99
         return
 
 
@@ -133,7 +138,17 @@ class Agent:
         (the action that should be used/train the network with)
         """
         if not self.adaptive_exploration:return self.get_prediction(state)[0]
+        variance = self.calculate_intrisic_reward(state)
         action = self.get_prediction(state)[3].detach().cpu()
+        if np.random.rand()< self.eps: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
+        if variance == 0: return action
+        
+        dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
+        expl_action = dist.sample()
+        return expl_action
+    
+
+    def calculate_intrisic_reward(self, state):
 
         self.rnd_predictor.eval()
         self.rnd_target.eval()
@@ -144,13 +159,6 @@ class Agent:
 
         variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed)
         self.variance = variance #self.variance servs as a buffer
-        if variance == 0: return action
-        
-        if np.random.rand()< .05: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
-        dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
-        expl_action = dist.sample()
-        return expl_action
-    
 
     def get_variance(self):
         if self.adaptive_exploration:return self.variance
@@ -162,10 +170,15 @@ class Agent:
     
     
     def step(self, state, action, reward, next_state, done, episode, timestep):
+
         if self.adaptive_exploration:
             self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
             self.eps_index+=1
-        self.replay_memory.add(state, action, reward, next_state, done)
+        if self.use_rnd:
+            intrisic_reward = self.calculate_intrisic_reward(state)
+            self.replay_memory.add(state, action, reward, next_state, done, intrisic_reward)
+        else:
+            self.replay_memory.add(state, action, reward, next_state, done)
         
         if(episode == self.cut_training and not self.exploration_terminated): 
             
@@ -181,22 +194,23 @@ class Agent:
             Q_losses = []
             for _ in range(self.update_target_every):
                 experiences = self.replay_memory.sample()
-                if self.use_priorized_exp_replay:
-                    loss, self.model, self.target_model = self.train_per(  experiences, 
-                                                        network = self.model,
-                                                        target_network = self.target_model,
-                                                        optim = self.optimizer)
+        
+                if self.use_rnd:
+                    loss, self.model, self.target_model = self.train_using_rnd( experiences, 
+                                                                                network = self.model,
+                                                                                target_network = self.target_model,
+                                                                                optim = self.optimizer)
                 else:
                     loss, self.model, self.target_model = self.train_basic(     experiences, 
                                                                                 network = self.model,
                                                                                 target_network = self.target_model,
-                                                                                optim = self.optimizer)
+                                                                                optim = self.optimizer)    
                 Q_losses.append(loss)
-            if self.adaptive_exploration: self.train_rnd(experiences)
+            if self.adaptive_exploration or self.use_rnd: self.train_rnd_network(experiences)
             return np.mean(Q_losses)
         return 0.0
 
-    def train_basic(self, experiences,network,target_network, optim, normal_training=True ):
+    def train_basic(self, experiences,network,target_network, optim ):
         
         
         network.train()
@@ -290,7 +304,7 @@ class Agent:
     def set_beta(self, beta):
         self.beta = beta
     
-    def train_rnd(self, experiences):
+    def train_rnd_network(self, experiences):
         # Set the networks to the appropriate mode
         self.rnd_predictor.train()
         self.rnd_target.eval()
@@ -315,3 +329,31 @@ class Agent:
         self.rnd_optimizer.step()
 
 
+
+    def train_using_rnd(self, experiences, network,target_network, optim):
+        network.train()
+        states, actions, rewards, next_states, dones, intrisic_rewards = experiences
+
+        #taking data from the network
+        with torch.no_grad():
+            future_vs_states = target_network(next_states)[2] # the V(s')
+
+        
+        current_qs_states = network(states,action=actions)[1] #the Q(s)
+        rewards = torch.reshape(rewards, (self.batch_size, 1))
+        intrisic_rewards = torch.reshape(intrisic_rewards, (self.batch_size, 1))  
+        new_qs_extr = rewards + self.gamma * future_vs_states * (torch.reshape(1-dones, (self.batch_size, 1))) 
+        new_qs_intr = intrisic_rewards + self.intr_gamma * future_vs_states 
+        #perform the optimization
+        new_qs = new_qs_intr + new_qs_extr
+        loss = self.loss(new_qs, current_qs_states)
+
+        optim.zero_grad()
+        loss.backward()
+        clip_grad_norm_(network.parameters(), self.clip_grad)
+        optim.step()
+
+
+        #update the target/(not crazy) model
+        target_network=self.update_network(network, target_network)
+        return float(loss.detach().cpu().numpy()), network, target_network

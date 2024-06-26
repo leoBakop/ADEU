@@ -10,7 +10,7 @@ from operator import itemgetter
 class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
 
-    def __init__(self, buffer_size, batch_size, device, seed):
+    def __init__(self, buffer_size, batch_size, device, store_intrisic):
         """Initialize a ReplayBuffer object.
         Params
         ======
@@ -21,12 +21,15 @@ class ReplayBuffer:
         self.device = device
         self.memory = deque(maxlen=buffer_size)  
         self.batch_size = batch_size
-        self.seed = seed
+        self.store_intrisic = store_intrisic
         
     
-    def add(self, state, action, reward, next_state, done):
+    def add(self, state, action, reward, next_state, done, intrisic=None):
         """Add a new experience to memory."""
-
+        if self.store_intrisic:
+            assert intrisic is not None
+            self.memory.append([state, action, reward, next_state, done, intrisic])
+            return
         self.memory.append([state, action, reward, next_state, done])
     
     
@@ -41,7 +44,9 @@ class ReplayBuffer:
         rewards = torch.from_numpy(np.vstack([e[2] for e in experiences if e is not None])).float().to(self.device)
         next_states = torch.from_numpy(np.stack([e[3] for e in experiences if e is not None])).float().to(self.device)
         dones = torch.from_numpy(np.vstack([e[4] for e in experiences if e is not None]).astype(np.uint8)).float().to(self.device)
-        
+        if self.store_intrisic:
+            intr_rewards = torch.from_numpy(np.vstack([e[5] for e in experiences if e is not None])).float().to(self.device)
+            return (states, actions, rewards, next_states, dones, intr_rewards)
         return (states, actions, rewards, next_states, dones)
         
     def __len__(self):
