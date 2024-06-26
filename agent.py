@@ -144,7 +144,7 @@ class Agent:
         if not self.adaptive_exploration:return self.get_prediction(state)[0]
         variance = self.calculate_intrisic_reward(state)
         action = self.get_prediction(state)[3].detach().cpu()
-        if np.random.rand()< self.eps: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
+        if np.random.rand()< 0.05: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
         if variance == 0: return action
         
         dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 

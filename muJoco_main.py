@@ -48,9 +48,6 @@ def main(seed, horizon, timesteps, domain, per, ade, use_rnd, **kwargs):
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/{domain}', episode_trigger= lambda x:  x % 1000 == 9, name_prefix=f'{domain}_')
     
-    env = TransformObservation(env, lambda obs: obs/1_000)
-
-    
     c = 1
     I = 1
     
