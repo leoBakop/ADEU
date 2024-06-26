@@ -115,7 +115,7 @@ class Agent:
             self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate*10**(0))
             self.rnd_loss = MSELoss()
-            self.epsilon = np.linspace(.15, .005, decay)
+            self.epsilon = np.linspace(.07, .005, decay)
             self.eps_index = 0
         return
 
@@ -163,8 +163,9 @@ class Agent:
     
     
     def step(self, state, action, reward, next_state, done, episode, timestep):
-        self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
-        self.eps_index+=1
+        if self.adaptive_exploration:
+            self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
+            self.eps_index+=1
         self.replay_memory.add(state, action, reward, next_state, done)
         
         if(episode == self.cut_training and not self.exploration_terminated): 

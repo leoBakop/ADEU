@@ -213,7 +213,7 @@ def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_explo
 def make_evaluation_env(dom, iterations, episode, per, adaptive_exploration, **kwargs):
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
     if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/per_{per}_adap_expl_{adaptive_exploration}/extra_expl/_0', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
+    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/per_{per}_adap_expl_{adaptive_exploration}/extra_expl/eps/_0', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards):
@@ -236,7 +236,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to use PER')
-    parser.add_argument('--ade', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
     #parser.add_argument('--max_episode_steps', type=int, default = 100)
@@ -248,7 +248,7 @@ if __name__ == '__main__':
     timesteps = args.steps
     ade = args.ade
     max_episode_steps = timesteps
-    horizon = int(30_000_000 / timesteps)
+    horizon = int(30_000_000 / timesteps) #hopeer:30M  swimmer: 5M
     if timesteps < 200:
         horizon = int(horizon/10)
 
