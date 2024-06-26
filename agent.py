@@ -9,7 +9,6 @@ import time
 from replay_buffer import ReplayBuffer, Priorized_Experience_Replay
 import utils
 from torch.distributions import MultivariateNormal
-from sklearn.metrics import root_mean_squared_error
 
 
 class Agent:
@@ -35,7 +34,7 @@ class Agent:
                     probabilities = None, 
                     index = 0,
                     #for the adaptive expploration
-                    adaptive_eploration = True,
+                    adaptive_exploration = True,
                     decay = 1_000_000
                  ):
         
@@ -108,12 +107,12 @@ class Agent:
         if (loaded_mem is not None):
             self.replay_memory.memory = loaded_mem
         
-        self.adaptive_exploration = adaptive_eploration
+        self.adaptive_exploration = adaptive_exploration
         if self.adaptive_exploration:
             
             self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
-            self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate*10**(0))
+            self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate)
             self.rnd_loss = MSELoss()
             self.epsilon = np.linspace(.07, .005, decay)
             self.eps_index = 0
@@ -217,7 +216,7 @@ class Agent:
         loss = self.loss(new_qs, current_qs_states)
         optim.zero_grad()
         loss.backward()
-        clip_grad_norm_(network.parameters(), self.clip_grad) #check it
+        clip_grad_norm_(network.parameters(), self.clip_grad)
         optim.step()
 
 

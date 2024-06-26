@@ -1,7 +1,7 @@
 import gym
 from gym import Env, spaces
-from seed import torch, np
-
+import torch
+import numpy as np
 import subprocess
 import os
 import sys

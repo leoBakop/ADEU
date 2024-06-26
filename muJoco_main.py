@@ -39,8 +39,8 @@ def set_seed(seed):
 
 
 def main(seed, horizon, timesteps, domain, per, ade, **kwargs):
-    adaptive_eploration = ade
-    wandb_session(domain, seed, name=f'naf_{domain}_per_{per}_seed_{seed}', code=code_creation(per = per, adaptive_exploration=adaptive_eploration))
+    adaptive_exploration = ade
+    wandb_session(domain, seed, name=f'naf_{domain}_per_{per}_seed_{seed}', code=code_creation(per = per, adaptive_exploration=adaptive_exploration))
     env = gym.make(domain, **kwargs)
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/{domain}', episode_trigger= lambda x:  x % 1000 == 9, name_prefix=f'{domain}_')
@@ -91,11 +91,11 @@ def main(seed, horizon, timesteps, domain, per, ade, **kwargs):
                     end_training = end_training,
                     evaluation_c=0,
                     train_frequency=1, #2 dor all in general except cheetha now I am trying for hopper #it was 8 for halg cheetah,
-                    adaptive_eploration=adaptive_eploration,
+                    adaptive_exploration=adaptive_exploration,
                     decay=int(0.5*horizon*timesteps)
                     )
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards = \
-        run(**kwargs, seed = seed, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, per = per, eval_env = eval_env, adaptive_exploration = adaptive_eploration) #the headstart was 200
+        run(**kwargs, seed = seed, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, per = per, eval_env = eval_env, adaptive_exploration = adaptive_exploration) #the headstart was 200
     store(f"./experiments/{domain}/per_{per}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards)    
     env.close()
     return mean_evaluation_rewards

@@ -15,14 +15,9 @@ import xml.etree.ElementTree as ET
 
 def main():
     #declaration of the testing algorithms
-    per = True
-    pse = True
-    alg_1 = True
+    per = False
     
-    p = "" if per else " not"
-    noise = "" if pse else " not"
-    print(f"Priorized experience replay is{p} used")
-    print(f"Parameter noise space for exploration is {noise} used")
+    
 
 
  
@@ -31,7 +26,7 @@ def main():
     first_time = True #only this should be changed
     evaluation = 15 #how many times this experiment has run
     modify_seed_value(xml_file_path='important/autobahn.sumocfg',new_seed_value=evaluation)
-    evaluation_c = .05 # the c during the evaluation
+    adaptive_exploration = True
     seed = evaluation
     I = 1
 
@@ -48,11 +43,11 @@ def main():
 
    
     if first_time: 
-        path = f'experiments/naf/c_1_speed_boost_55_45/per_{per}_pse_{pse}/upd_{I}/evaluation_{evaluation}'
+        path = f'experiments/naf/c_1_speed_boost_55_45/per_{per}/upd_{I}/evaluation_{evaluation}'
         path_network = None
         
     else:
-        path = f'experiments/naf/election/neutral_envx55_45/per_{per}_pse_{pse}/evaluation_{evaluation}' #where I would like for the final results to be stored 
+        path = f'experiments/naf/election/neutral_envx55_45/per_{per}/evaluation_{evaluation}' #where I would like for the final results to be stored 
         path_network = [f'experiments/naf/c_1_neutral_env/second_False_per_False_pse_False/clear_evaluation/evaluation_{evaluation}',
                         f'experiments/naf/c_1_speed_boost_55_45/second_False_per_False_pse_False/evaluation_{evaluation}']  #if i would like also to load a network
     #create this folder if it is not already exists
@@ -62,12 +57,9 @@ def main():
     
 
     #initialiazation if the storing values
-    loaded_mem = None 
     eps = 1
     c = 1
-    index = 0
     p = None
-    sigma = 0
     ################################
 
 
@@ -95,34 +87,34 @@ def main():
     else:
         path_network = None
 
-    agent = Agent( len(current_observation),
+    agent = Agent( len(observation),
                     hidden_layer_1=inside_layer_1,
                     hidden_layer_2=inside_layer_2,
                     use_priorized_exp_replay= per,
                     batch_size=batch_size,
                     update_target_every= I,
                     max_speed=1.5,
-                    gamma= .98,
+                    gamma= .99,
                     c=c,
                     min_mem_size= batch_size,
-                    learning_rate= .001,
+                    learning_rate= 1e-3, #robotics is with e-3 cheetah with e-4
                     tau=.001, #it was 0.005
                     action_size=2,
-                    path = path_network,
-                    loaded_mem = loaded_mem,
-                    probabilities= p,
-                    index = index,
-                    T=episode_size,
+                    path = None,
+                    loaded_mem = None,
+                    probabilities= None,
+                    index = 0,
                     #for per
                     alpha = 0.7,
                     beta = 0.5,
                     #for the parameter space exploration
-                    pse = pse,
-                    sigma = sigma,
                     seed = seed,
                     cut_training = cut_training,
                     end_training = end_training,
-                    evaluation_c=evaluation_c
+                    evaluation_c=0,
+                    train_frequency= 5 , #2 dor all in general except cheetha now I am trying for hopper #it was 8 for halg cheetah,
+                    adaptive_exploration=adaptive_exploration,
+                    decay=int(0.5*horizon*episode_size)
                     )
    
     
@@ -136,8 +128,7 @@ def main():
         start = checkpoint if not first_time else 0, 
         eps = eps,
         c=c,
-        alg_1 = alg_1,
-        pse = pse,
+
         per = per,
         path = path,
         beta_0 = .5,
@@ -151,7 +142,7 @@ def main():
     return
 
 
-def run(env: SumoEnv,  agent: Agent, first_obs, horizon, episode_size,path = None, start = 0, first_time = True, eps=1, c =1, alg_1=True, pse = False, per = False, end_training = 500, goal = .2, begining =1, beta_0 =0.5,s_string =None):
+def run(env: SumoEnv,  agent: Agent, first_obs, horizon, episode_size,path = None, start = 0, first_time = True, eps=1, c =1, per = False, end_training = 500, goal = .2, begining =1, beta_0 =0.5,s_string =None):
     loss_inside_episode = 0
 
     current_observation = first_obs
@@ -164,16 +155,9 @@ def run(env: SumoEnv,  agent: Agent, first_obs, horizon, episode_size,path = Non
 
     #for the eps-greedy algorithm/ general exploration
     goal = goal + 0.01
-    num_steps = 100
-    terminate_psne = 200
-    head_start_psne = 80
-    epsilon_values = np.linspace(begining, goal, num_steps*episode_size)
-    if not alg_1:
-        eps_alg_2 =np.linspace(0.5, 0, num_steps) 
-    first_time_pse = pse
+    
     if per : b = beta_0
-    if pse: 
-        eps_psne = np.linspace(.4,0.15, terminate_psne) 
+    
     if not first_time:
         if not type(s_string) is list:
             r = np.load(s_string+'/stored_data/reward.npy')
@@ -205,15 +189,7 @@ def run(env: SumoEnv,  agent: Agent, first_obs, horizon, episode_size,path = Non
             env.set_sleep(.005)
         if(episode == horizon - 1): save(path, agent=agent, episode = episode,
                  reward_per_episode=reward_per_episode, speed_per_episode=speed_per_episode, coll_per_episode=coll_per_episode, sum_of_rewards=sum_of_rewards)
-        if pse:
-            if episode < head_start_psne and first_time_pse: 
-                tradeoff = 0
-            else:
-                if first_time_pse:
-                    print("---------------------------PSNE just started -----------------------") 
-                    first_time_pse = False
-                tradeoff = eps_psne[episode - head_start_psne] if episode < terminate_psne+ head_start_psne else eps_psne[-1]
-            agent.update_psne_tradeoff(tradeoff)
+        
             
         reward_inside_episode = 0
         loss_inside_episode = 0
@@ -228,13 +204,7 @@ def run(env: SumoEnv,  agent: Agent, first_obs, horizon, episode_size,path = Non
                 fraction = min((episode*t+t) / (horizon*t+dt), 1.0)
                 b = b + fraction * (1.0 - b)
                 agent.set_beta(beta=b)
-            if pse and t % 400 == 0: 
-                agent.add_noise_to_nn()
-            #select action
-            if not alg_1:
-                e = eps_alg_2[episode] if episode <(len(eps_alg_2)) else eps_alg_2[-1] 
-            e = -1 if alg_1 else e #that means that I dont perform an e-greedy alg
-            
+                        
             if episode >= end_training: action_continuous=agent.get_clear_action(state = current_observation) #returns a random action with .01 else returns the clear action
             else: action_continuous=agent.get_action(current_observation)
             first_call = not first_call if first_call else first_call
@@ -246,7 +216,7 @@ def run(env: SumoEnv,  agent: Agent, first_obs, horizon, episode_size,path = Non
             new_observation, reward, done, collisions = env.step(action_continuous_str)
             #storing to memory and performing the action
             done = True if collisions > 1 else False
-            loss_inside_episode+=agent.step(current_observation, action_continuous, reward, torch.FloatTensor(new_observation), done, episode) #push that in memory
+            loss_inside_episode+=agent.step(current_observation, action_continuous, reward, torch.FloatTensor(new_observation), done, episode, timestep = t) #push that in memory
             current_observation = torch.FloatTensor(new_observation)
             #statistics 
             sum_of_rewards[episode*episode_size + t] = reward
@@ -262,16 +232,7 @@ def run(env: SumoEnv,  agent: Agent, first_obs, horizon, episode_size,path = Non
                 coll_inside_episode += 1 if collisions_timestep_counter > 0 else 0 
                 collisions_timestep_counter = 0
 
-            i = episode_size*episode + t 
-            if i < len(epsilon_values):
-                eps = epsilon_values[i]
-                c = eps
-            if(c == goal): #that actually means that i stop every kind of exploration by removing spe and c
-                print("--------------------------Exploration was terminated----------------------------------")
-                c = goal - .01
-                eps = goal  - .01
-                
-            agent.set_c(c, episode) #change this in order to get clear action or not after an episode
+           
         #logistics
         reward_per_episode[episode] = reward_inside_episode/episode_size
         speed_per_episode[episode] = speed_inside_episode/episode_size
