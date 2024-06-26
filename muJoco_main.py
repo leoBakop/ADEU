@@ -16,6 +16,8 @@ import argparse
 from gym.wrappers import RecordVideo
 from tqdm import tqdm
 import random
+from gymnasium.wrappers import TransformObservation
+
 
 
 def set_seed(seed):
@@ -45,6 +47,10 @@ def main(seed, horizon, timesteps, domain, per, ade, use_rnd, **kwargs):
     env = gym.make(domain, **kwargs)
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/{domain}', episode_trigger= lambda x:  x % 1000 == 9, name_prefix=f'{domain}_')
+    
+    env = TransformObservation(env, lambda obs: obs/1_000)
+
+    
     c = 1
     I = 1
     
