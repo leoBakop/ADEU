@@ -9,6 +9,7 @@ import time
 from replay_buffer import ReplayBuffer, Priorized_Experience_Replay
 import utils
 from torch.distributions import MultivariateNormal
+import welford
 
 
 class Agent:
@@ -123,8 +124,10 @@ class Agent:
             self.eps_index = 0
             self.eps = .07
             if self.use_rnd:
+                self.welford = welford.Welford()
                 self.gamma = 0.999
                 self.intr_gamma = 0.99
+                self.w_index = 0
         return
 
 
@@ -143,7 +146,7 @@ class Agent:
         """
         if not self.adaptive_exploration:return self.get_prediction(state)[0]
         variance = self.calculate_intrisic_reward(state)
-        variance = .07
+        #variance = .1 in case of constant variance
         self.variance = variance #self.variance servs as a buffer
         action = self.get_prediction(state)[3].detach().cpu()
         if np.random.rand()< self.eps: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
@@ -162,12 +165,11 @@ class Agent:
             variance = np.absolute(self.rnd_predictor(state).detach().cpu() - self.rnd_target(state).detach().cpu())
         self.rnd_predictor.train()
         self.rnd_target.train()
-
         variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed)
         return variance
     
     def get_variance(self):
-        if self.adaptive_exploration:return self.variance
+        if self.adaptive_exploration or self.use_rnd: return self.variance
         return 0
 
     def get_clear_action(self,state):
@@ -181,7 +183,15 @@ class Agent:
             self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
             self.eps_index+=1
         if self.use_rnd:
+            #in case of the rnd, instead of the running average and runing std we are going to use
+            #the 'sample average' and 'sample std' to increase the computational efficiency
+            #instead of witing code we are going to use the welford algorithm via its package
             intrisic_reward = self.calculate_intrisic_reward(state)
+            self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
+            self.variance = intrisic_reward #self.variance servs as a buffer
+            self.w_index+=1
+            if self.w_index > 10:
+                intrisic_reward/=self.welford.var_s[1]
             self.replay_memory.add(state, action, reward, next_state, done, intrisic_reward)
         else:
             self.replay_memory.add(state, action, reward, next_state, done)
