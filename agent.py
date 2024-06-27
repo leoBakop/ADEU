@@ -119,7 +119,7 @@ class Agent:
             self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate)
             self.rnd_loss = MSELoss()
-            self.epsilon = np.linspace(.07, .01, decay)
+            self.epsilon = np.linspace(.07, .001, decay)
             self.eps_index = 0
             self.eps = .07
             if self.use_rnd:
@@ -143,8 +143,10 @@ class Agent:
         """
         if not self.adaptive_exploration:return self.get_prediction(state)[0]
         variance = self.calculate_intrisic_reward(state)
+        variance = .07
+        self.variance = variance #self.variance servs as a buffer
         action = self.get_prediction(state)[3].detach().cpu()
-        if np.random.rand()< 0.05: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
+        if np.random.rand()< self.eps: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
         if variance == 0: return action
         
         dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
@@ -162,7 +164,6 @@ class Agent:
         self.rnd_target.train()
 
         variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed)
-        self.variance = variance #self.variance servs as a buffer
         return variance
     
     def get_variance(self):

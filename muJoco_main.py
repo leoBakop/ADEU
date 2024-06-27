@@ -219,7 +219,7 @@ def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_explo
 def make_evaluation_env(dom, iterations, episode, per, adaptive_exploration, use_rnd, **kwargs):
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
     if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/_adap_expl_{adaptive_exploration}_use_rnd{use_rnd}/_eps', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
+    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/_adap_expl_{adaptive_exploration}_use_rnd{use_rnd}/no_ade_const_var_.07', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards):
