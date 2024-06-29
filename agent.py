@@ -115,7 +115,7 @@ class Agent:
         self.adaptive_exploration = adaptive_exploration
         self.use_rnd = use_rnd
         if self.adaptive_exploration or self.use_rnd:
-            
+            self.variance = 0
             self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate)
@@ -187,11 +187,10 @@ class Agent:
             #the 'sample average' and 'sample std' to increase the computational efficiency
             #instead of witing code we are going to use the welford algorithm via its package
             intrisic_reward = self.calculate_intrisic_reward(state)
-            self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
+            #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
             self.variance = intrisic_reward #self.variance servs as a buffer
             self.w_index+=1
-            if self.w_index > 10:
-                intrisic_reward/=self.welford.var_s[1]
+            #if self.w_index > 10: intrisic_reward/=self.welford.var_s[1]
             self.replay_memory.add(state, action, reward, next_state, done, intrisic_reward)
         else:
             self.replay_memory.add(state, action, reward, next_state, done)

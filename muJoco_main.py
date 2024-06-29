@@ -94,7 +94,7 @@ def main(seed, horizon, timesteps, domain, per, ade, use_rnd, **kwargs):
                     cut_training = cut_training,
                     end_training = end_training,
                     evaluation_c=0,
-                    train_frequency=1, #2 dor all in general except cheetha now I am trying for hopper #it was 8 for halg cheetah,
+                    train_frequency=2, #For all the other domains it was 1
                     adaptive_exploration=adaptive_exploration,
                     decay=int(0.5*horizon*timesteps),
                     use_rnd=use_rnd
@@ -212,14 +212,14 @@ def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_explo
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
                 break
-    wandb.log({domain+"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cum_evaluation_reward': np.mean(mean_sum_reward)})
+    wandb.log({domain+"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
 
 def make_evaluation_env(dom, iterations, episode, per, adaptive_exploration, use_rnd, **kwargs):
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
     if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/_adap_expl_{adaptive_exploration}_use_rnd{use_rnd}/no_ade_const_var_.07', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
+    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{dom}/_adap_expl_{adaptive_exploration}_use_rnd{use_rnd}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards):
