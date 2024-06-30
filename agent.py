@@ -144,6 +144,7 @@ class Agent:
         returns always
         (the action that should be used/train the network with)
         """
+        if self.use_rnd:self.get_prediction(state)[3] #if the efficiency of the rnd changes, it is because of that
         if not self.adaptive_exploration:return self.get_prediction(state)[0]
         variance = self.calculate_intrisic_reward(state)
         #variance = .1 in case of constant variance

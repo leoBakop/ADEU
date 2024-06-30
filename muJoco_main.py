@@ -42,7 +42,9 @@ def set_seed(seed):
 
 def main(seed, horizon, timesteps, domain, per, ade, use_rnd, **kwargs):
     adaptive_exploration = ade
-
+    #kwargs={
+    #    'max_episode_steps':timesteps,
+    #}
     wandb_session(domain, seed, name=f'naf use ade: {ade}, use rnd: {use_rnd} seed_{seed}', code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration))
     env = gym.make(domain, **kwargs)
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
@@ -78,7 +80,7 @@ def main(seed, horizon, timesteps, domain, per, ade, use_rnd, **kwargs):
                     max_speed=env.action_space.high[0],
                     gamma= .99,
                     c=c,
-                    min_mem_size= batch_size,
+                    min_mem_size= 1_000 * batch_size,
                     learning_rate= 1e-3, #robotics is with e-3 cheetah with e-4
                     tau=.001, #it was 0.005
                     action_size=env.action_space.shape[0],
@@ -94,7 +96,7 @@ def main(seed, horizon, timesteps, domain, per, ade, use_rnd, **kwargs):
                     cut_training = cut_training,
                     end_training = end_training,
                     evaluation_c=0,
-                    train_frequency=2, #For all the other domains it was 1
+                    train_frequency=1, #For all the other domains it was 1
                     adaptive_exploration=adaptive_exploration,
                     decay=int(0.5*horizon*timesteps),
                     use_rnd=use_rnd
@@ -243,7 +245,7 @@ if __name__ == '__main__':
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to use PER')
     parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--dom', type=str, default='MountainCarContinuous-v0', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
     #parser.add_argument('--max_episode_steps', type=int, default = 100)
     args = parser.parse_args()
@@ -255,7 +257,7 @@ if __name__ == '__main__':
     timesteps = args.steps
     ade = args.ade
     max_episode_steps = timesteps
-    horizon = int(30_000_000 / timesteps) #hopeer:30M  swimmer: 5M
+    horizon = int(30_000_000 / timesteps) #hopeer:30M  swimmer and point maze: 5M
     if timesteps < 200:
         horizon = int(horizon/10)
 
