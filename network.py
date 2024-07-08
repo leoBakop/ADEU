@@ -88,7 +88,6 @@ class DeepNAF(nn.Module):
 class NAF(nn.Module):
     def __init__(self, state_size, action_size, layer_size_1, layer_size_2, seed,device, c = 1.0, max_speed = 1):
         super(NAF, self).__init__()
-        self.seed = torch.manual_seed(seed)
         self.input_shape = state_size
         self.action_size = action_size
         self.device = device

@@ -125,8 +125,8 @@ class Agent:
             self.eps = .07
             if self.use_rnd:
                 self.welford = welford.Welford()
-                self.gamma = 0.999
-                self.intr_gamma = 0.99
+                self.gamma = 0.99
+                self.intr_gamma = 0.999
                 self.w_index = 0
         return
 
@@ -189,7 +189,7 @@ class Agent:
             #instead of witing code we are going to use the welford algorithm via its package
             intrisic_reward = self.calculate_intrisic_reward(state)
             #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
-            self.variance = intrisic_reward #self.variance servs as a buffer
+            self.variance = intrisic_reward**2 #self.variance servs as a buffer
             self.w_index+=1
             #if self.w_index > 10: intrisic_reward/=self.welford.var_s[1]
             self.replay_memory.add(state, action, reward, next_state, done, intrisic_reward)
