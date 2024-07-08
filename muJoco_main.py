@@ -79,7 +79,7 @@ def main(seed, horizon, timesteps, domain, per, ade, use_rnd, **kwargs):
                     max_speed=env.action_space.high[0],
                     gamma= .99,
                     c=c,
-                    min_mem_size= 1_000 * batch_size,
+                    min_mem_size= 10 * batch_size,
                     learning_rate= 1e-3, #robotics is with e-3 cheetah with e-4
                     tau=.001, #it was 0.005
                     action_size=env.action_space.shape[0],
@@ -243,8 +243,8 @@ if __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to use PER')
     parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
-    parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--dom', type=str, default='MountainCarContinuous-v0', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--rnd', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--dom', type=str, default='Pendulum-v1', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
     #parser.add_argument('--max_episode_steps', type=int, default = 100)
     args = parser.parse_args()

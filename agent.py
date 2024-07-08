@@ -117,7 +117,8 @@ class Agent:
         if self.adaptive_exploration or self.use_rnd:
             self.variance = 0
             self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
-            self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
+            self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device) if self.adaptive_exploration \
+                                else network.RND_NetworkPred(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate)
             self.rnd_loss = MSELoss()
             self.epsilon = np.linspace(.07, .001, decay)

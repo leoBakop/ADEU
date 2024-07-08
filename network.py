@@ -184,3 +184,22 @@ class RND_Network(nn.Module):
         x = self.output(x)
         x = 4**(2*self.max_speed)*(self.sigmoid(x)-1)
         return x
+    
+
+class RND_NetworkPred(nn.Module):
+    def __init__(self, device, input_size = 10, hidden_size = 64, max_speed = 1):
+        super(RND_NetworkPred, self).__init__()
+        self.device = device
+        self.max_speed = max_speed
+        # Define the layers
+        hidden_size *= 2
+        self.fc1 = nn.Linear(input_size, hidden_size)  
+        self.output = nn.Linear(hidden_size, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        x = x.to(self.device)
+        x = F.relu(self.fc1(x))
+        x = self.output(x)
+        x = 4**(2*self.max_speed)*(self.sigmoid(x)-1)
+        return x
