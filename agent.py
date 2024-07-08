@@ -150,7 +150,9 @@ class Agent:
         #variance = .1 in case of constant variance
         self.variance = variance #self.variance servs as a buffer
         action = self.get_prediction(state)[3].detach().cpu()
-        if np.random.rand()< self.eps: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
+        #if np.random.rand()< self.eps: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
+        
+        variance = max(variance, self.eps)
         if variance == 0: return action
         
         dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
@@ -192,7 +194,7 @@ class Agent:
             self.variance = intrisic_reward**2 #self.variance servs as a buffer
             self.w_index+=1
             #if self.w_index > 10: intrisic_reward/=self.welford.var_s[1]
-            self.replay_memory.add(state, action, reward, next_state, done, intrisic_reward)
+            self.replay_memory.add(state, action, reward, next_state, done, self.variance)
         else:
             self.replay_memory.add(state, action, reward, next_state, done)
         
