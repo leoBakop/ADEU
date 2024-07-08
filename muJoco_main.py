@@ -243,7 +243,7 @@ if __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to use PER')
     parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
-    parser.add_argument('--rnd', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--dom', type=str, default='MountainCarContinuous-v0', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
     #parser.add_argument('--max_episode_steps', type=int, default = 100)
@@ -257,7 +257,7 @@ if __name__ == '__main__':
     ade = args.ade
     max_episode_steps = timesteps
     horizon = int(30_000_000 / timesteps) #hopeer:30M  swimmer and point maze: 5M
-    if timesteps < 200:
+    if timesteps <= 200:
         horizon = int(horizon/10)
 
         
