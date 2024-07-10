@@ -393,7 +393,7 @@ if __name__ == "__main__":
         curiosity_reward_per_env = np.array(
             [discounted_reward.update(reward_per_step) for reward_per_step in curiosity_rewards.cpu().data.numpy().T]
         )
-        #i have not done this neither before
+        #i have not done this 
         mean, std, count = (
             np.mean(curiosity_reward_per_env),
             np.std(curiosity_reward_per_env),

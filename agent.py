@@ -10,6 +10,7 @@ from replay_buffer import ReplayBuffer, Priorized_Experience_Replay
 import utils
 from torch.distributions import MultivariateNormal
 import welford
+from gym.wrappers.normalize import RunningMeanStd
 
 
 class Agent:
@@ -115,6 +116,7 @@ class Agent:
         self.adaptive_exploration = adaptive_exploration
         self.use_rnd = use_rnd
         if self.adaptive_exploration or self.use_rnd:
+            
             self.variance = 0
             self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device) if self.adaptive_exploration \
@@ -125,6 +127,7 @@ class Agent:
             self.eps_index = 0
             self.eps = .07
             if self.use_rnd:
+                self.obss = RunningMeanStd(shape= (1, inputs_shape))
                 self.welford = welford.Welford()
                 self.gamma = 0.99
                 self.intr_gamma = 0.999
@@ -190,7 +193,11 @@ class Agent:
             #in case of the rnd, instead of the running average and runing std we are going to use
             #the 'sample average' and 'sample std' to increase the computational efficiency
             #instead of witing code we are going to use the welford algorithm via its package
-            intrisic_reward = self.calculate_intrisic_reward(state)
+            self.obss.update(state.numpy())
+            s = (state - self.obss.mean )/ self.obss.var**2
+            s = s[0].float()
+            s = torch.clamp(s, min = -5, max = 5)
+            intrisic_reward = self.calculate_intrisic_reward(s)
             #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
             self.variance = intrisic_reward**2 #self.variance servs as a buffer
             self.w_index+=1
@@ -330,7 +337,9 @@ class Agent:
 
         # Extract states from experiences
         states, *_ = experiences
-
+        if self.use_rnd:
+            states = ((states.cpu() - self.obss.mean) / self.obss.var**2)[0].float()
+            states= torch.clamp(states, -5, 5)
         
         # Forward pass through the target network
         with torch.no_grad():
