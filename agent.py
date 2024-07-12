@@ -39,8 +39,11 @@ class Agent:
                     adaptive_exploration = True,
                     decay = 1_000_000,
                     use_rnd = False,
+                    use_noisy_nets = False
                  ):
-        
+        if use_noisy_nets:
+            adaptive_exploration = False
+            use_rnd = False
         #networks
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
@@ -118,16 +121,18 @@ class Agent:
         if self.adaptive_exploration or self.use_rnd:
             
             self.variance = 0
-            self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
-            self.rnd_predictor = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device) if self.adaptive_exploration \
-                                else network.RND_NetworkPred(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
+            self.rnd_target = network.RND_Network(device=self.device, use_rnd=False, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device) if self.adaptive_exploration \
+                              else network.RND_Network(device=self.device, use_rnd=True, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
+            self.rnd_predictor = network.RND_Network(device=self.device, use_rnd=False, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device) if self.adaptive_exploration \
+                                else network.RND_NetworkPred(device=self.device, use_rnd=True, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate)
             self.rnd_loss = MSELoss()
-            self.epsilon = np.linspace(.07, .001, decay)
+            self.epsilon = np.linspace(.07, .001, decay) 
             self.eps_index = 0
             self.eps = .07
+            self.obss = RunningMeanStd(shape= (1, inputs_shape)) #it was inside the following if
             if self.use_rnd:
-                self.obss = RunningMeanStd(shape= (1, inputs_shape))
+                
                 self.welford = welford.Welford()
                 self.gamma = 0.99
                 self.intr_gamma = 0.999
@@ -150,7 +155,14 @@ class Agent:
         """
         if self.use_rnd:self.get_prediction(state)[3] #if the efficiency of the rnd changes, it is because of that
         if not self.adaptive_exploration:return self.get_prediction(state)[0]
-        variance = self.calculate_intrisic_reward(state)
+
+        #new code fof the normilization in ade (instead only for the rnd)
+        self.obss.update(state.numpy())
+        s = (state - self.obss.mean )/ self.obss.var**2
+        s = s[0].float()
+        s = torch.clamp(s, min = -5, max = 5)
+
+        variance = self.calculate_intrisic_reward(s) #it was just state
         #variance = .1 in case of constant variance
         self.variance = variance #self.variance servs as a buffer
         action = self.get_prediction(state)[3].detach().cpu()
@@ -185,7 +197,7 @@ class Agent:
     
     
     def step(self, state, action, reward, next_state, done, episode, timestep):
-
+        l = 0
         if self.adaptive_exploration:
             self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
             self.eps_index+=1
@@ -232,9 +244,9 @@ class Agent:
                                                                                 target_network = self.target_model,
                                                                                 optim = self.optimizer)    
                 Q_losses.append(loss)
-            if self.adaptive_exploration or self.use_rnd: self.train_rnd_network(experiences)
-            return np.mean(Q_losses)
-        return 0.0
+            if self.adaptive_exploration or self.use_rnd: l =self.train_rnd_network(experiences)
+            return np.mean(Q_losses), l
+        return 0.0, l
 
     def train_basic(self, experiences,network,target_network, optim ):
         
@@ -337,7 +349,7 @@ class Agent:
 
         # Extract states from experiences
         states, *_ = experiences
-        if self.use_rnd:
+        if self.use_rnd or self.adaptive_exploration: #it was only if self.use_rnd
             states = ((states.cpu() - self.obss.mean) / self.obss.var**2)[0].float()
             states= torch.clamp(states, -5, 5)
         
@@ -355,7 +367,7 @@ class Agent:
         self.rnd_optimizer.zero_grad()
         l.backward()
         self.rnd_optimizer.step()
-
+        return l
 
 
     def train_using_rnd(self, experiences, network,target_network, optim):
@@ -370,8 +382,9 @@ class Agent:
         current_qs_states = network(states,action=actions)[1] #the Q(s)
         rewards = torch.reshape(rewards, (self.batch_size, 1))
         intrisic_rewards = torch.reshape(intrisic_rewards, (self.batch_size, 1))  
-        new_qs_extr = rewards + self.gamma * future_vs_states * (torch.reshape(1-dones, (self.batch_size, 1))) 
-        new_qs_intr = intrisic_rewards + self.intr_gamma * future_vs_states 
+        new_qs_extr = rewards + intrisic_rewards + self.gamma * future_vs_states * (torch.reshape(1-dones, (self.batch_size, 1))) 
+        #new_qs_intr = intrisic_rewards + self.intr_gamma * future_vs_states 
+        new_qs_intr = 0
         #perform the optimization
         new_qs = new_qs_intr + new_qs_extr
         loss = self.loss(new_qs, current_qs_states)

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn 
 from torch.distributions import MultivariateNormal
 import torch.nn.functional as F
+from torchrl.modules import NoisyLinear
 
 
 class DeepNAF(nn.Module):
@@ -86,7 +87,7 @@ class DeepNAF(nn.Module):
         return action, Q, V, action_value
         
 class NAF(nn.Module):
-    def __init__(self, state_size, action_size, layer_size_1, layer_size_2, seed,device, c = 1.0, max_speed = 1):
+    def __init__(self, state_size, action_size, layer_size_1, layer_size_2, seed,device, c = 1.0, max_speed = 1, noisy_nets = False):
         super(NAF, self).__init__()
         self.input_shape = state_size
         self.action_size = action_size
@@ -95,7 +96,7 @@ class NAF(nn.Module):
         
         self.head_1 = nn.Linear(self.input_shape, layer_size_1)
         self.bn1 = nn.BatchNorm1d(layer_size_1)
-        self.ff_1 = nn.Linear(layer_size_1, layer_size_2)
+        self.ff_1 = nn.Linear(layer_size_1, layer_size_2) if not noisy_nets else NoisyLinear(layer_size_1, layer_size_2)
         self.bn2 = nn.BatchNorm1d(layer_size_2)
         self.action_values = nn.Linear(layer_size_2, action_size)
         self.value = nn.Linear(layer_size_2, 1)
@@ -166,10 +167,11 @@ class NAF(nn.Module):
 
 
 class RND_Network(nn.Module):
-    def __init__(self, device, input_size = 10, hidden_size = 64, max_speed = 1):
+    def __init__(self, device, use_rnd, input_size = 10, hidden_size = 64, max_speed = 1):
         super(RND_Network, self).__init__()
         self.device = device
         self.max_speed = max_speed
+        self.use_rnd = use_rnd
         # Define the layers
         hidden_size *= 2
         self.fc1 = nn.Linear(input_size, hidden_size)  
@@ -182,15 +184,17 @@ class RND_Network(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.output(x)
+        if self.use_rnd: return 2*self.max_speed*(self.sigmoid(x))
         x = 4**(2*self.max_speed)*(self.sigmoid(x)-1)
         return x
     
 
 class RND_NetworkPred(nn.Module):
-    def __init__(self, device, input_size = 10, hidden_size = 64, max_speed = 1):
+    def __init__(self, device, use_rnd = True, input_size = 10, hidden_size = 64, max_speed = 1):
         super(RND_NetworkPred, self).__init__()
         self.device = device
         self.max_speed = max_speed
+        self.use_rnd = use_rnd
         # Define the layers
         hidden_size *= 2
         self.fc1 = nn.Linear(input_size, hidden_size)  
@@ -201,5 +205,7 @@ class RND_NetworkPred(nn.Module):
         x = x.to(self.device)
         x = F.relu(self.fc1(x))
         x = self.output(x)
+        if self.use_rnd: return 2*self.max_speed*(self.sigmoid(x))
+
         x = 4**(2*self.max_speed)*(self.sigmoid(x)-1)
         return x
