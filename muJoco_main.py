@@ -255,7 +255,7 @@ if __name__ == '__main__':
     ade = args.ade
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
-    horizon = int(30_000_000 / timesteps) #hopeer:30M  swimmer and point maze: 5M
+    horizon = int(15_000_000 / timesteps) #hopeer:30M  fetch reach 30M
     if timesteps <= 200:
         horizon = int(horizon/10)
 
