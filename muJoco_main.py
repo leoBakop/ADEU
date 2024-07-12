@@ -103,7 +103,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, **kwargs):
                     )
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
         run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, noisy_nets=noisy_nets)
-    store(f"./experiments/{domain}/ade_{adaptive_exploration}_rnd{use_rnd}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode)    
+    store(f"./experiments/{domain}/ade_{adaptive_exploration}_rnd{use_rnd}_noisy_nets{noisy_nets}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode)    
     env.close()
     return mean_evaluation_rewards
 

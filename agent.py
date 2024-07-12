@@ -156,8 +156,7 @@ class Agent:
         if self.use_rnd:self.get_prediction(state)[3] #if the efficiency of the rnd changes, it is because of that
         if not self.adaptive_exploration:return self.get_prediction(state)[0]
 
-        #new code fof the normilization in ade (instead only for the rnd)
-        self.obss.update(state.numpy())
+        
         s = (state - self.obss.mean )/ self.obss.var**2
         s = s[0].float()
         s = torch.clamp(s, min = -5, max = 5)
@@ -198,6 +197,7 @@ class Agent:
     
     def step(self, state, action, reward, next_state, done, episode, timestep):
         l = 0
+        if self.adaptive_exploration or self.use_rnd: self.obss.update(state.numpy())
         if self.adaptive_exploration:
             self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
             self.eps_index+=1
@@ -385,8 +385,8 @@ class Agent:
         rewards = torch.reshape(rewards, (self.batch_size, 1))
         intrisic_rewards = torch.reshape(intrisic_rewards, (self.batch_size, 1))  
         new_qs_extr = rewards + intrisic_rewards + self.gamma * future_vs_states * (torch.reshape(1-dones, (self.batch_size, 1))) 
-        #new_qs_intr = intrisic_rewards + self.intr_gamma * future_vs_states 
-        new_qs_intr = 0
+        new_qs_intr = intrisic_rewards + self.intr_gamma * future_vs_states 
+        
         #perform the optimization
         new_qs = new_qs_intr + new_qs_extr
         loss = self.loss(new_qs, current_qs_states)
