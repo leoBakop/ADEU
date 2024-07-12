@@ -206,7 +206,9 @@ class Agent:
             #the 'sample average' and 'sample std' to increase the computational efficiency
             #instead of witing code we are going to use the welford algorithm via its package
             self.obss.update(state.numpy())
-            s = (state - self.obss.mean )/ self.obss.var**2
+            #s = state #that was the correct now I am testing following line
+            s = next_state
+            s = (s - self.obss.mean )/ self.obss.var**2
             s = s[0].float()
             s = torch.clamp(s, min = -5, max = 5)
             intrisic_reward = self.calculate_intrisic_reward(s)
