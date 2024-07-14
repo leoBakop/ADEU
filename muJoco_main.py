@@ -80,7 +80,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, **kwargs):
                     gamma= .99,
                     c=c,
                     min_mem_size= 10 * batch_size,
-                    learning_rate= 1e-3, #robotics is with e-3 cheetah with e-4
+                    learning_rate= 1e-4, #robotics is with e-3 cheetah with e-4
                     tau=.001, #it was 0.005
                     action_size=env.action_space.shape[0],
                     path = None,
@@ -95,7 +95,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, **kwargs):
                     cut_training = cut_training,
                     end_training = end_training,
                     evaluation_c=0,
-                    train_frequency=1, #For all the other domains it was 1
+                    train_frequency=4, #For all the other domains it was 1, for cheetah is 4
                     adaptive_exploration=adaptive_exploration,
                     decay=int(0.5*horizon*timesteps),
                     use_rnd=use_rnd,
@@ -255,7 +255,7 @@ if __name__ == '__main__':
     ade = args.ade
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
-    horizon = int(15_000_000 / timesteps) #hopeer:30M  fetch reach 15M
+    horizon = int(30_000_000 / timesteps) #hopeer:30M  fetch reach 15M, cheetah 30M
     if timesteps <= 200:
         horizon = int(horizon/10)
 
