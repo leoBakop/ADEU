@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
+import sys
 from agent import Agent
+from combined_agent import Pretrained_Agent
 import pickle
 import os
 import datetime
@@ -39,12 +40,26 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, **kwargs):
+def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwargs):
     adaptive_exploration = ade
     #kwargs={
     #    'max_episode_steps':timesteps,
     #}
-    wandb_session(domain, seed, name=f'naf, using ade: {ade}, using rnd: {use_rnd}, using noisy nets: {noisy_nets} seed:{seed}', code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets))
+
+    #just for printing
+    arguments = {
+        'Boltz+ade':comb,
+        'ade': ade,
+        'rnd':use_rnd,
+        'noisy_nets':noisy_nets,
+        'Bolz': (not ade) and (not use_rnd) and (not noisy_nets) and (not comb)
+    }
+    label = [a for a in arguments.keys() if arguments[a] ][0]
+    name = f'naf, using {label}, seed:{seed}'
+    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb))
+    
+    
+    
     env = gym.make(domain, **kwargs)
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/{domain}', episode_trigger= lambda x:  x % 1000 == 9, name_prefix=f'{domain}_')
@@ -68,47 +83,50 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, **kwargs):
     horizon = horizon
     end_training = horizon 
     print(f"actions are limited between [{-env.action_space.high[0]} and {env.action_space.high[0]}]")
-    
 
-    agent = Agent( len(observation),
-                    hidden_layer_1=inside_layer_1,
-                    hidden_layer_2=inside_layer_2,
-                    use_priorized_exp_replay= False,
-                    batch_size=batch_size,
-                    update_target_every= I,
-                    max_speed=env.action_space.high[0],
-                    gamma= .99,
-                    c=c,
-                    min_mem_size= 10 * batch_size,
-                    learning_rate= 1e-4, #robotics is with e-3 cheetah with e-4
-                    tau=.001, #it was 0.005
-                    action_size=env.action_space.shape[0],
-                    path = None,
-                    loaded_mem = None,
-                    probabilities= None,
-                    index = 0,
-                    #for per
-                    alpha = 0.7,
-                    beta = 0.5,
-                    #for the parameter space exploration
-                    seed = seed,
-                    cut_training = cut_training,
-                    end_training = end_training,
-                    evaluation_c=0,
-                    train_frequency=4, #For all the other domains it was 1, for cheetah is 4
-                    adaptive_exploration=adaptive_exploration,
-                    decay=int(0.5*horizon*timesteps),
-                    use_rnd=use_rnd,
-                    use_noisy_nets=noisy_nets
-                    )
+    agent_params = {
+    "inputs_shape": len(observation),
+    "hidden_layer_1": inside_layer_1,
+    "hidden_layer_2": inside_layer_2,
+    "use_priorized_exp_replay": False,
+    "batch_size": batch_size,
+    "update_target_every": I,
+    "max_speed": env.action_space.high[0],
+    "gamma": 0.99,
+    "c": c,
+    "min_mem_size": 10 * batch_size,
+    "learning_rate": 1e-3,  # robotics is with e-3, cheetah with e-4
+    "tau": 0.001,  # it was 0.005
+    "action_size": env.action_space.shape[0],
+    "path": None,
+    "loaded_mem": None,
+    "probabilities": None,
+    "index": 0,
+    "alpha": 0.7,  # for PER
+    "beta": 0.5,   # for PER
+    "seed": seed,  # for parameter space exploration
+    "cut_training": cut_training,
+    "end_training": end_training,
+    "evaluation_c": 0,
+    "train_frequency": 8,  # For all other domains it was 1, for cheetah it is 8
+    "adaptive_exploration": adaptive_exploration,
+    "decay": int(0.5 * horizon * timesteps),
+    "use_rnd": use_rnd,
+    "use_noisy_nets": noisy_nets
+    }
+
+    agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = 0.05))
+
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
-        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, noisy_nets=noisy_nets)
-    store(f"./experiments/{domain}/ade_{adaptive_exploration}_rnd{use_rnd}_noisy_nets{noisy_nets}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode)    
+        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label)
+    agent_params['horizon']=horizon
+    agent_params['timesteps'] = timesteps
+    store(f"./experiments/{domain}/{label}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
     env.close()
     return mean_evaluation_rewards
 
 
-def run(env, eval_env, domain, horizon = 10_000, agent:Agent = None, timesteps = 50, adaptive_exploration = True,use_rnd = False,noisy_nets = False, **kwargs):
+def run(env, eval_env, domain, horizon, agent:Agent, timesteps, adaptive_exploration,use_rnd ,label, **kwargs):
     mean_reward = np.zeros(horizon)
     percentage = 1
     mean_evaluation_rewards = np.zeros(int(percentage*horizon/100)+100)
@@ -129,7 +147,7 @@ def run(env, eval_env, domain, horizon = 10_000, agent:Agent = None, timesteps =
             wandb.log({"timestep with max uncertanty": arg_var_per_episode[episode -1 if episode > 0 else 0]})
             wandb.log({"max uncertanty": var_per_episode[episode -1 if episode > 0 else 0]})
             wandb.log({'error of the rnd network': rnd_loss})
-            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, adaptive_exploration=adaptive_exploration, use_rnd=use_rnd, noisy_nets=noisy_nets)
+            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
@@ -147,7 +165,9 @@ def run(env, eval_env, domain, horizon = 10_000, agent:Agent = None, timesteps =
             observation, reward, done, truncated, info = env.step(action)
             if isinstance(observation, dict):
                 observation = np.concatenate([arr for arr in observation.values()])
-            _, rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done, episode, timestep=t) #push that in memory
+            _, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done, episode, timestep=t) #push that in memory
+            #just to have a good plotting
+            rnd_loss = tmp_rnd_loss if (adaptive_exploration or use_rnd) and tmp_rnd_loss > 0 else rnd_loss
             current_observation = torch.FloatTensor(observation)
 
             #statistics
@@ -179,8 +199,8 @@ def wandb_session(domain , seed = 0, name = None, code = 0):
         }
     )
     
-def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_exploration, episode, iterations, use_rnd, noisy_nets,**kwargs):
-    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, adaptive_exploration = adaptive_exploration, use_rnd = use_rnd, noisy_nets=noisy_nets, **kwargs)
+def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, label, episode, iterations,**kwargs):
+    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, label = label, **kwargs)
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
     mean_sum_reward = np.zeros(evaluation_episodes)
@@ -213,13 +233,13 @@ def evaluate(agent:Agent, timesteps, evaluation_episodes, domain, adaptive_explo
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
 
-def make_evaluation_env(dom, iterations, episode, adaptive_exploration, use_rnd,noisy_nets, **kwargs):
+def make_evaluation_env(dom, iterations, episode, label, **kwargs):
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
     if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/naf/{dom}/_adap_expl_{adaptive_exploration}_use_rnd_{use_rnd}_use_noisy_nets{noisy_nets}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
+    eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/naf/{dom}/{label}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
-def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode):
+def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params):
     if not os.path.exists(path+'/stored_data'):
         os.makedirs(path+'/stored_data')
     np.save(path+'/stored_data/mean_reward.npy', mean_reward)
@@ -230,8 +250,17 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
     np.save(path+'/stored_data/cum_evaluation_rewards.npy', cum_evaluation_rewards)
     np.save(path+'/stored_data/timestep_with_maximum_varience.npy', arg_var_per_epsiode)
     np.save(path+'/stored_data/maximum_varience', var_per_episode)
+    
+    full_path = f"{path}+/hyperparameters.txt"
+    
+    with open(full_path, 'wb') as f:
+        pickle.dump(params, f)
 
-def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False):
+    return
+def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False):
+    if comb:
+        if not adaptive_exploration: sys.exit(-1)
+        return 4
     if noisy_nets:return 3
     if adaptive_exploration: return 1
     if use_rnd: return 2
@@ -243,6 +272,7 @@ if __name__ == '__main__':
     parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--noisy_nets', action='store_true', default=False)
+    parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
    
@@ -255,7 +285,8 @@ if __name__ == '__main__':
     ade = args.ade
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
-    horizon = int(30_000_000 / timesteps) #hopeer:30M  fetch reach 15M, cheetah 30M
+    comb = args.comb
+    horizon = int(100_000_000 / timesteps) #hopeer:100M  fetch reach 15M, cheetah 7M
     if timesteps <= 200:
         horizon = int(horizon/10)
 
@@ -265,7 +296,7 @@ if __name__ == '__main__':
     
     mean_evaluation_rewards = []
 
-    print(f"{domain}+ code:{code_creation(adaptive_exploration=ade, use_rnd=use_rnd, noisy_nets=noisy_nets)}")
+    print(f"{domain}+ code:{code_creation(adaptive_exploration=ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb)}")
 
     for s in range(seeds):
-        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, ade = ade, use_rnd=use_rnd, noisy_nets=noisy_nets)
+        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, ade = ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb =comb)

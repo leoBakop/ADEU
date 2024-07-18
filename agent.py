@@ -127,6 +127,7 @@ class Agent:
                                 else network.RND_NetworkPred(device=self.device, use_rnd=True, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate)
             self.rnd_loss = MSELoss()
+            self.decay = decay
             self.epsilon = np.linspace(.07, .001, decay) 
             self.eps_index = 0
             self.eps = .07
@@ -160,7 +161,7 @@ class Agent:
         s = (state - self.obss.mean )/ self.obss.var**2
         s = s[0].float()
         s = torch.clamp(s, min = -5, max = 5)
-
+        #s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
         variance = self.calculate_intrisic_reward(s) #it was just state
         #variance = .1 in case of constant variance
         self.variance = variance #self.variance servs as a buffer
@@ -191,13 +192,13 @@ class Agent:
         return 0
 
     def get_clear_action(self,state):
-        self.model.set_c(self.evaluation_c)
-        return self.get_prediction(state)[0]
+        return self.get_prediction(state)[3]
     
     
     def step(self, state, action, reward, next_state, done, episode, timestep):
         l = 0
         if self.adaptive_exploration or self.use_rnd: self.obss.update(state.numpy())
+        
         if self.adaptive_exploration:
             self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
             self.eps_index+=1
@@ -211,6 +212,8 @@ class Agent:
             s = (s - self.obss.mean )/ self.obss.var**2
             s = s[0].float()
             s = torch.clamp(s, min = -5, max = 5)
+            #s = self.scale(s) #scale between -1 1 if the values are too low
+
             intrisic_reward = self.calculate_intrisic_reward(s)
             #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
             self.variance = intrisic_reward**2 #self.variance servs as a buffer
@@ -336,11 +339,7 @@ class Agent:
         self.pse = False #no need for extra layer noise in the evaluation phase
         self.update_target_every = 1 #this was 0 in the other experiments
     
-    def set_c(self, c, episode):
-        if episode >= self.end_training: 
-            self.c = self.evaluation_c #for clear action in testing mode this should be 0.0
-        else : self.c = c
-
+    
     def set_beta(self, beta):
         self.beta = beta
     
@@ -354,7 +353,9 @@ class Agent:
         if self.use_rnd or self.adaptive_exploration: #it was only if self.use_rnd
             states = ((states.cpu() - self.obss.mean) / self.obss.var**2)[0].float()
             states= torch.clamp(states, -5, 5)
-        
+            #new code, if the state containts low values, I scale it between -1 1
+            #states = self.scale(state=states)
+
         # Forward pass through the target network
         with torch.no_grad():
             target_outputs = self.rnd_target(states)
@@ -400,3 +401,17 @@ class Agent:
         #update the target/(not crazy) model
         target_network=self.update_network(network, target_network)
         return float(loss.detach().cpu().numpy()), network, target_network
+
+
+    def scale(self, state, max_value = 5, min_value = - 5):
+        if torch.max(state) > 1: return state
+        t_min = torch.min(state)
+        t_max = torch.max(state)
+
+        # Apply min-max scaling to range [0, 1]
+        normalized_state = (state - t_min) / (t_max - t_min)
+
+        # Scale to range [min_value, max_value]
+        scaled_state = (max_value - min_value) * normalized_state + min_value
+
+        return scaled_state
