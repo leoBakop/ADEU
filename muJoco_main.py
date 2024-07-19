@@ -41,6 +41,7 @@ def set_seed(seed):
 
 
 def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwargs):
+    set_seed(seed)
     adaptive_exploration = ade
     #kwargs={
     #    'max_episode_steps':timesteps,
@@ -76,8 +77,8 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     eval_env.reset(seed=seed)
 
     #horizon and network
-    inside_layer_1 = 256
-    inside_layer_2= 256
+    inside_layer_1 = 64
+    inside_layer_2= 64
     batch_size = 64
     cut_training = -1
     horizon = horizon
@@ -94,7 +95,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "max_speed": env.action_space.high[0],
     "gamma": 0.99,
     "c": c,
-    "min_mem_size": 10 * batch_size,
+    "min_mem_size": batch_size,
     "learning_rate": 1e-3,  # robotics is with e-3, cheetah with e-4
     "tau": 0.001,  # it was 0.005
     "action_size": env.action_space.shape[0],
@@ -110,12 +111,12 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "evaluation_c": 0,
     "train_frequency": 8,  # For all other domains it was 1, for cheetah it is 8
     "adaptive_exploration": adaptive_exploration,
-    "decay": int(0.5 * horizon * timesteps),
+    "decay": int(0.05 * horizon * timesteps),
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
 
-    agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = 0.05))
+    agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = 0.03))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
         run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label)
@@ -286,13 +287,13 @@ if __name__ == '__main__':
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
     comb = args.comb
-    horizon = int(100_000_000 / timesteps) #hopeer:100M  fetch reach 15M, cheetah 7M
+    horizon = int(40_000_000 / timesteps) #hopeer:100M  fetch reach 15M, cheetah 7M
     if timesteps <= 200:
         horizon = int(horizon/10)
 
         
 
-    seeds = 3
+    seeds = 1
     
     mean_evaluation_rewards = []
 

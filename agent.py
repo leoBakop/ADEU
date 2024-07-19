@@ -154,8 +154,13 @@ class Agent:
         returns always
         (the action that should be used/train the network with)
         """
-        if self.use_rnd:self.get_prediction(state)[3] #if the efficiency of the rnd changes, it is because of that
-        if not self.adaptive_exploration:return self.get_prediction(state)[0]
+        if self.use_rnd: return self.get_prediction(state)[3] #if the efficiency of the rnd changes, it is because of that
+        if not self.adaptive_exploration:
+            v = self.model.get_noise_cov()
+            v = v.detach().cpu().numpy().reshape(v.shape[-1], v.shape[-1])
+            v = np.array([v[i,i]for i in range(v.shape[0])])
+            self.variance = np.mean(v)
+            return self.get_prediction(state)[0]
 
         
         s = (state - self.obss.mean )/ self.obss.var**2
@@ -188,8 +193,7 @@ class Agent:
         return variance
     
     def get_variance(self):
-        if self.adaptive_exploration or self.use_rnd: return self.variance
-        return 0
+        return self.variance
 
     def get_clear_action(self,state):
         return self.get_prediction(state)[3]
