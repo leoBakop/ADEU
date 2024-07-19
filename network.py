@@ -104,8 +104,7 @@ class NAF(nn.Module):
         self.c =c
         self.max_speed = max_speed
 
-    def set_c(self, c):
-        self.c = c
+
     
     def forward(self, input_, action=None):
         
@@ -143,7 +142,7 @@ class NAF(nn.Module):
         
         if self.c < 10**(-2): return action_value, Q, V, action_value
         #P = torch.where(P < 1e-4, torch.tensor(1e-4, dtype=torch.float32), P)
-        self.noise_cov= self.c*torch.inverse(P) #just in order to export it
+        self.noise_cov= self.c * torch.inverse(P) #just in order to export it
         #if self.testing_period: #in case of testing/evaluation there is no need for the noisy action
         #    return action_value, Q, V, action_value 
         # add noise to action mu:
@@ -184,8 +183,9 @@ class RND_Network(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.output(x)
-        if self.use_rnd: return 2*self.max_speed*(self.sigmoid(x))
-        x = 4**(2*self.max_speed)*(self.sigmoid(x)-1)
+        if self.use_rnd: return 2*self.max_speed*(self.sigmoid(x)-0.5)
+        #x = 4**(2*self.max_speed)*(self.sigmoid(x)-0.5)
+        x = 2*self.max_speed*(self.sigmoid(x)-0.5)
         return x
     
 
@@ -205,7 +205,7 @@ class RND_NetworkPred(nn.Module):
         x = x.to(self.device)
         x = F.relu(self.fc1(x))
         x = self.output(x)
-        if self.use_rnd: return 2*self.max_speed*(self.sigmoid(x))
-
-        x = 4**(2*self.max_speed)*(self.sigmoid(x)-1)
+        if self.use_rnd: return 2*self.max_speed*(self.sigmoid(x)-0.5)
+        x = 2*self.max_speed*(self.sigmoid(x)-0.5)
+        #x = 4**(2*self.max_speed)*(self.sigmoid(x)-0.5)
         return x

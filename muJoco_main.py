@@ -65,7 +65,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/{domain}', episode_trigger= lambda x:  x % 1000 == 9, name_prefix=f'{domain}_')
     
-    c = 1
+    c = 0.3
     I = 1
     
 
@@ -77,8 +77,8 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     eval_env.reset(seed=seed)
 
     #horizon and network
-    inside_layer_1 = 64
-    inside_layer_2= 64
+    inside_layer_1 = 256
+    inside_layer_2= 256
     batch_size = 64
     cut_training = -1
     horizon = horizon
@@ -96,7 +96,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "gamma": 0.99,
     "c": c,
     "min_mem_size": batch_size,
-    "learning_rate": 1e-3,  # robotics is with e-3, cheetah with e-4
+    "learning_rate": 1e-4,  # robotics is with e-3, cheetah with e-4
     "tau": 0.001,  # it was 0.005
     "action_size": env.action_space.shape[0],
     "path": None,
@@ -109,7 +109,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "cut_training": cut_training,
     "end_training": end_training,
     "evaluation_c": 0,
-    "train_frequency": 8,  # For all other domains it was 1, for cheetah it is 8
+    "train_frequency": 16,  # For all other domains it was 1, for cheetah it is 8
     "adaptive_exploration": adaptive_exploration,
     "decay": int(0.05 * horizon * timesteps),
     "use_rnd": use_rnd,
@@ -250,9 +250,9 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
     np.save(path+'/stored_data/evaluation_duration.npy', evaluation_duration)
     np.save(path+'/stored_data/cum_evaluation_rewards.npy', cum_evaluation_rewards)
     np.save(path+'/stored_data/timestep_with_maximum_varience.npy', arg_var_per_epsiode)
-    np.save(path+'/stored_data/maximum_varience', var_per_episode)
+    np.save(path+'/stored_data/maximum_varience.npy', var_per_episode)
     
-    full_path = f"{path}+/hyperparameters.txt"
+    full_path = path+"/hyperparameters.txt"
     
     with open(full_path, 'wb') as f:
         pickle.dump(params, f)
@@ -287,7 +287,7 @@ if __name__ == '__main__':
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
     comb = args.comb
-    horizon = int(40_000_000 / timesteps) #hopeer:100M  fetch reach 15M, cheetah 7M
+    horizon = int(50_000_000 / timesteps) #hopeer:50M  fetch reach 15M, cheetah 7M
     if timesteps <= 200:
         horizon = int(horizon/10)
 

@@ -68,7 +68,6 @@ class Agent:
             self.target_model.load_state_dict(torch.load(path))
 
         #miscellaneous for networks
-        self.c = c
         self.evaluation_c = evaluation_c
         self.lr = learning_rate
         self.optimizer = Adam(self.model.parameters(), lr=learning_rate)
@@ -166,7 +165,7 @@ class Agent:
         s = (state - self.obss.mean )/ self.obss.var**2
         s = s[0].float()
         s = torch.clamp(s, min = -5, max = 5)
-        #s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
+        s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
         variance = self.calculate_intrisic_reward(s) #it was just state
         #variance = .1 in case of constant variance
         self.variance = variance #self.variance servs as a buffer
@@ -189,7 +188,7 @@ class Agent:
             variance = np.absolute(self.rnd_predictor(state).detach().cpu() - self.rnd_target(state).detach().cpu())
         self.rnd_predictor.train()
         self.rnd_target.train()
-        variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed)
+        #variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed) #beacuse the we will clip the exploration action when needed
         return variance
     
     def get_variance(self):
@@ -216,7 +215,7 @@ class Agent:
             s = (s - self.obss.mean )/ self.obss.var**2
             s = s[0].float()
             s = torch.clamp(s, min = -5, max = 5)
-            #s = self.scale(s) #scale between -1 1 if the values are too low
+            s = self.scale(s) #scale between -1 1 if the values are too low
 
             intrisic_reward = self.calculate_intrisic_reward(s)
             #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
@@ -326,7 +325,6 @@ class Agent:
         self.optimizer.param_groups[0]['lr'] = lr
 
     def update_network(self, network, target_network):
-        target_network.set_c(self.c)
         for target_param, model_param in zip(target_network.parameters(), network.parameters()):
             target_param.data.copy_(self.tau*model_param.data + (1.0-self.tau)*target_param.data)
         
@@ -358,7 +356,7 @@ class Agent:
             states = ((states.cpu() - self.obss.mean) / self.obss.var**2)[0].float()
             states= torch.clamp(states, -5, 5)
             #new code, if the state containts low values, I scale it between -1 1
-            #states = self.scale(state=states)
+            states = self.scale(state=states)
 
         # Forward pass through the target network
         with torch.no_grad():

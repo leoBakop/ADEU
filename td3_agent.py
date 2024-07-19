@@ -3,7 +3,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from replay_buffer import ReplayBuffer
+import network
+from torch.distributions import MultivariateNormal
+import welford
+from gym.wrappers.normalize import RunningMeanStd
 
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
 # Paper: https://arxiv.org/abs/1802.09477
@@ -67,21 +71,27 @@ class TD3(object):
         policy_noise=0.2,
         noise_clip=0.5,
         policy_freq=2,
-        device = None,
+        lr = 3e-4,
+        train_frequency = 1,
         batch_size = 256,
+        min_mem_size = 256,
+        buffer_size =1e+5,
         adaptive_exploration = True,
+        decay = 1e+6,
         use_rnd = False,
         use_noisy_nets = False
     ):
-        self.device = device
+        if torch.cuda.is_available(): self.device = torch.device("cuda")
+        else: self.device = torch.device("cpu")
+        device = self.device
         print(f'the TD3 agent will run in the {self.device}')
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
 
         self.critic = Critic(state_dim, action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
 
         self.batch_size = batch_size
         self.action_dim = action_dim
@@ -91,32 +101,136 @@ class TD3(object):
         self.policy_noise = policy_noise
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
-
+        self.min_mem_size = min_mem_size
+        self.train_frequency = train_frequency
+        self.buffer = ReplayBuffer(buffer_size=int(buffer_size), batch_size=int(batch_size), device = self.device, store_intrisic=use_rnd)
         self.total_it = 0
+        #Algorithm used for this run
+        self.adaptive_exploration = adaptive_exploration
+        self.use_rnd = use_rnd
+        self.use_noisy_nets = use_noisy_nets
+        self.variance = self.policy_noise
+        ####################################################
+        if self.adaptive_exploration or self.use_rnd:
+            hidden_layer = 256
+            self.rnd_target = network.RND_Network(device=self.device, use_rnd=False, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device) if self.adaptive_exploration \
+                              else network.RND_Network(device=self.device, use_rnd=True, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device)
+            self.rnd_predictor = network.RND_Network(device=self.device, use_rnd=False, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device) if self.adaptive_exploration \
+                                else network.RND_NetworkPred(device=self.device, use_rnd=True, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device)
+            self.rnd_optimizer = torch.optim.SGD(self.rnd_predictor.parameters(), lr=lr)
+            self.rnd_loss = nn.MSELoss()
+            self.decay = decay
+            self.epsilon = np.linspace(.07, .001, decay) 
+            self.eps_index = 0
+            self.eps = .07
+            self.obss = RunningMeanStd(shape= (1, state_dim)) #it was inside the following if
+            if self.use_rnd:
+                
+                self.welford = welford.Welford()
+                self.gamma = 0.99
+                self.intr_gamma = 0.999
+                self.w_index = 0
 
-    def select_action(self, state):
+        
+
+    def get_clear_action(self, state):  
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
+
+    def get_variance(self):
+        return self.variance
+
+    def calculate_intrisic_reward(self, state):
+
+        self.rnd_predictor.eval()
+        self.rnd_target.eval()
+        with torch.no_grad():
+            variance = np.absolute(self.rnd_predictor(state).detach().cpu() - self.rnd_target(state).detach().cpu())
+        self.rnd_predictor.train()
+        self.rnd_target.train()
+        return variance
 
 
     def get_action(self, state):
         """ method which returns the action suitable for exploration """
-        action = (
-				self.select_action(np.array(state))
+        """ action = (
+				self.get_clear_action(np.array(state))
 				+ np.random.normal(0, self.max_action * self.policy_noise, size=self.action_dim)
-			).clip(-self.max_action, self.max_action)
+			).clip(-self.max_action, self.max_action) """
+        clear_action = self.get_clear_action(np.array(state))
+        if self.use_rnd: return clear_action
+        if not self.adaptive_exploration: return (clear_action + np.random.normal(0, self.max_action * self.policy_noise, size=self.action_dim)).clip(-self.max_action, self.max_action)
 
+        s = (state - self.obss.mean )/ self.obss.var**2
+        s = s[0].float()
+        s = torch.clamp(s, min = -5, max = 5)
+        #s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
+        variance = self.calculate_intrisic_reward(s) #it was just state
+        #variance = .1 in case of constant variance
+        self.variance = variance #self.variance servs as a buffer
+        if np.random.rand()< self.eps: return MultivariateNormal(clear_action.squeeze(-1), torch.eye(clear_action.squeeze(-1).shape[1],clear_action.squeeze(-1).shape[1])).sample() 
+        
+        #variance = max(variance, self.eps)
+        if variance == 0: return clear_action
+        
+        dist = MultivariateNormal(clear_action.squeeze(-1), variance * torch.eye(clear_action.squeeze(-1).shape[1],clear_action.squeeze(-1).shape[1])) 
+        action = dist.sample()
         return action
-    def train(self, replay_buffer):
+    
+
+    def step(self, state, action, reward, next_state, done, timestep):
+        l = 0
+        loss = 0
+        if self.adaptive_exploration or self.use_rnd: self.obss.update(state.numpy())
+        
+        if self.adaptive_exploration:
+            self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
+            self.eps_index+=1
+        if self.use_rnd:
+            #in case of the rnd, instead of the running average and runing std we are going to use
+            #the 'sample average' and 'sample std' to increase the computational efficiency
+            #instead of witing code we are going to use the welford algorithm via its package
+            self.obss.update(state.numpy())
+            #s = state #that was the correct now I am testing following line
+            s = next_state
+            s = (s - self.obss.mean )/ self.obss.var**2
+            s = s[0].float()
+            s = torch.clamp(s, min = -5, max = 5)
+            #s = self.scale(s) #scale between -1 1 if the values are too low
+
+            intrisic_reward = self.calculate_intrisic_reward(s)
+            #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
+            self.variance = intrisic_reward**2 #self.variance servs as a buffer
+            self.w_index+=1
+            #if self.w_index > 10: intrisic_reward/=self.welford.var_s[1]
+            self.buffer.add(state, action, reward, next_state, done, self.variance)
+        else:
+            self.buffer.add(state, action, reward, next_state, done)
+        
+        
+        # If enough samples are available in replay_memory, get random subset and learn
+        if len(self.buffer) > self.min_mem_size and timestep % self.train_frequency == 0:
+            experiences = self.buffer.sample()
+    
+            if self.use_rnd:
+                loss= self.train_using_rnd( experiences)
+            else:
+                loss = self.train_basic(experiences)    
+            
+            if self.adaptive_exploration or self.use_rnd: l =self.train_rnd_network(experiences)
+        return loss, l        
+
+    
+    
+    def train_basic(self, experiences):
         self.total_it += 1
 
         # Sample replay buffer 
-        state, action, next_state, reward, not_done = replay_buffer.sample(self.batch_size)
-
+        state, action, reward, next_state, done = experiences
         with torch.no_grad():
             # Select action according to policy and add clipped noise
             noise = (
-                torch.randn_like(action) * self.policy_noise
+                torch.randn_like(action.float()) * self.policy_noise
             ).clamp(-self.noise_clip, self.noise_clip)
             
             next_action = (
@@ -126,7 +240,7 @@ class TD3(object):
             # Compute the target Q value
             target_Q1, target_Q2 = self.critic_target(next_state, next_action)
             target_Q = torch.min(target_Q1, target_Q2)
-            target_Q = reward + not_done * self.discount * target_Q
+            target_Q = reward + (1 - done) * self.discount * target_Q
 
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state, action)
@@ -155,6 +269,7 @@ class TD3(object):
 
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+        return critic_loss
 
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")
