@@ -1,6 +1,7 @@
 from agent import Agent
 import sys
-
+from td3_agent import TD3
+import numpy as np
 class Pretrained_Agent(Agent):
 
     """ This agent implemenets the `exploiting a known behaviour' intuition. In more detail,
@@ -65,7 +66,7 @@ class Pretrained_Agent(Agent):
         self.varience = 0
         self.horizon = horizon
         self.timesteps = timesteps
-        self.index = index
+        self.index = 0
         self.pretraining = pretraining
 
 
@@ -76,4 +77,65 @@ class Pretrained_Agent(Agent):
         if(self.boltzman):
             print('Ade was just utilized')
             self.boltzman = False
+        return super().get_action(state)
+
+
+
+class Pretrained_TD3_Agent(TD3):
+    def __init__(self, 
+                state_dim, 
+                action_dim, 
+                max_action, 
+                seed, 
+                horizon,
+                timesteps,
+                pretraining,
+                discount=0.99, 
+                tau=0.005, 
+                policy_noise=0.2, 
+                noise_clip=0.5, 
+                policy_freq=2, 
+                lr=0.0003, 
+                train_frequency=1, 
+                batch_size=256, 
+                min_mem_size=256, 
+                buffer_size=100000, 
+                adaptive_exploration=True, 
+                decay=1000000, 
+                use_rnd=False, 
+                use_noisy_nets=False):
+        if (not adaptive_exploration):sys.exit(-1)
+        super().__init__(   state_dim=state_dim, 
+                            action_dim=action_dim, 
+                            max_action=max_action, 
+                            seed=seed, 
+                            discount=discount, 
+                            tau=tau, 
+                            policy_noise=policy_noise, 
+                            noise_clip=noise_clip, 
+                            policy_freq=policy_freq, 
+                            lr=lr, 
+                            train_frequency=train_frequency, 
+                            batch_size=batch_size, 
+                            min_mem_size=min_mem_size, 
+                            buffer_size=buffer_size, 
+                            adaptive_exploration=adaptive_exploration, 
+                            decay=decay, 
+                            use_rnd=use_rnd, 
+                            use_noisy_nets=use_noisy_nets)
+        self.baseline_exploration = True
+        self.varience = 0
+        self.horizon = horizon
+        self.timesteps = timesteps
+        self.index = 0
+        self.pretraining = pretraining
+
+    def get_action(self, state):
+        if self.index < int(self.pretraining*self.horizon*self.timesteps):
+            self.index += 1
+            clear_action = self.get_clear_action(np.array(state))
+            return (clear_action + np.random.normal(0, self.max_action * self.policy_noise, size=self.action_dim)).clip(-self.max_action, self.max_action) 
+        if(self.baseline_exploration):
+            print('Ade was just utilized')
+            self.baseline_exploration = False
         return super().get_action(state)

@@ -8,15 +8,21 @@ import network
 from torch.distributions import MultivariateNormal
 import welford
 from gym.wrappers.normalize import RunningMeanStd
+from torch.nn.utils import clip_grad_norm_
+from torchrl.modules import NoisyLinear
+
+
 
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
 # Paper: https://arxiv.org/abs/1802.09477
 
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action):
+    def __init__(self, state_dim, action_dim, max_action, noisy_nets = False):
         super(Actor, self).__init__()
         self.l1 = nn.Linear(state_dim, 256)
         self.l2 = nn.Linear(256, 256)
+        self.l2 = nn.Linear(256, 256) if not noisy_nets else NoisyLinear(256, 256)
+
         self.l3 = nn.Linear(256, action_dim)
         
         self.max_action = max_action
@@ -66,6 +72,7 @@ class TD3(object):
         state_dim,
         action_dim,
         max_action,
+        seed,
         discount=0.99,
         tau=0.005,
         policy_noise=0.2,
@@ -85,7 +92,7 @@ class TD3(object):
         else: self.device = torch.device("cpu")
         device = self.device
         print(f'the TD3 agent will run in the {self.device}')
-        self.actor = Actor(state_dim, action_dim, max_action).to(device)
+        self.actor = Actor(state_dim, action_dim, max_action, noisy_nets=use_noisy_nets).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
 
@@ -113,10 +120,12 @@ class TD3(object):
         ####################################################
         if self.adaptive_exploration or self.use_rnd:
             hidden_layer = 256
-            self.rnd_target = network.RND_Network(device=self.device, use_rnd=False, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device) if self.adaptive_exploration \
-                              else network.RND_Network(device=self.device, use_rnd=True, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device)
-            self.rnd_predictor = network.RND_Network(device=self.device, use_rnd=False, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device) if self.adaptive_exploration \
-                                else network.RND_NetworkPred(device=self.device, use_rnd=True, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device)
+            self.variance = 0
+            self.rnd_target = network.RND_Network(device=self.device, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device)
+            torch.manual_seed(10 * (seed+1))
+            self.rnd_predictor = network.RND_NetworkPred(device=self.device, input_size=state_dim, hidden_size=hidden_layer, max_speed=max_action).to(self.device)
+            torch.manual_seed(seed)
+            
             self.rnd_optimizer = torch.optim.SGD(self.rnd_predictor.parameters(), lr=lr)
             self.rnd_loss = nn.MSELoss()
             self.decay = decay
@@ -125,10 +134,11 @@ class TD3(object):
             self.eps = .07
             self.obss = RunningMeanStd(shape= (1, state_dim)) #it was inside the following if
             if self.use_rnd:
-                
-                self.welford = welford.Welford()
-                self.gamma = 0.99
-                self.intr_gamma = 0.999
+
+                self.intr_rewards = RunningMeanStd()                
+                self.discount = discount
+                self.discount = 0.999
+                self.intr_gamma = 0.99
                 self.w_index = 0
 
         
@@ -148,7 +158,11 @@ class TD3(object):
             variance = np.absolute(self.rnd_predictor(state).detach().cpu() - self.rnd_target(state).detach().cpu())
         self.rnd_predictor.train()
         self.rnd_target.train()
-        return variance
+        variance = np.clip(variance, a_min = - 2*self.max_action, a_max = 2*self.max_action) #just to avoid the infinite variance
+        if torch.isnan(variance).any():
+            print('debug')
+            variance = self.max_action
+        return variance**2
 
 
     def get_action(self, state):
@@ -168,14 +182,14 @@ class TD3(object):
         variance = self.calculate_intrisic_reward(s) #it was just state
         #variance = .1 in case of constant variance
         self.variance = variance #self.variance servs as a buffer
-        if np.random.rand()< self.eps: return MultivariateNormal(clear_action.squeeze(-1), torch.eye(clear_action.squeeze(-1).shape[1],clear_action.squeeze(-1).shape[1])).sample() 
+        if np.random.rand()< self.eps: return MultivariateNormal(torch.from_numpy(clear_action), variance * torch.eye(clear_action.shape[0],clear_action.shape[0])).sample().detach().cpu().numpy() 
         
         #variance = max(variance, self.eps)
         if variance == 0: return clear_action
         
-        dist = MultivariateNormal(clear_action.squeeze(-1), variance * torch.eye(clear_action.squeeze(-1).shape[1],clear_action.squeeze(-1).shape[1])) 
+        dist = MultivariateNormal(torch.from_numpy(clear_action), variance * torch.eye(clear_action.shape[0],clear_action.shape[0]))
         action = dist.sample()
-        return action
+        return action.detach().cpu().numpy()
     
 
     def step(self, state, action, reward, next_state, done, timestep):
@@ -196,11 +210,14 @@ class TD3(object):
             s = (s - self.obss.mean )/ self.obss.var**2
             s = s[0].float()
             s = torch.clamp(s, min = -5, max = 5)
+            
             #s = self.scale(s) #scale between -1 1 if the values are too low
 
             intrisic_reward = self.calculate_intrisic_reward(s)
             #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
             self.variance = intrisic_reward**2 #self.variance servs as a buffer
+            self.intr_rewards.update(self.variance.numpy())
+            self.variance /= self.intr_rewards.mean
             self.w_index+=1
             #if self.w_index > 10: intrisic_reward/=self.welford.var_s[1]
             self.buffer.add(state, action, reward, next_state, done, self.variance)
@@ -217,7 +234,7 @@ class TD3(object):
             else:
                 loss = self.train_basic(experiences)    
             
-            if self.adaptive_exploration or self.use_rnd: l =self.train_rnd_network(experiences)
+            if self.adaptive_exploration or self.use_rnd: l = self.train_rnd_network(experiences)
         return loss, l        
 
     
@@ -271,6 +288,90 @@ class TD3(object):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
         return critic_loss
 
+
+    def train_using_rnd(self, experiences):
+        self.total_it += 1
+
+        # Sample replay buffer 
+        state, action, reward, next_state, done, intrisic_reward = experiences
+        with torch.no_grad():
+            # Select action according to policy and add clipped noise
+            noise = (
+                torch.randn_like(action.float()) * self.policy_noise
+            ).clamp(-self.noise_clip, self.noise_clip)
+            
+            next_action = (
+                self.actor_target(next_state) + noise
+            ).clamp(-self.max_action, self.max_action)
+
+            # Compute the target Q value
+            target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+            target_Q = torch.min(target_Q1, target_Q2)
+            extr_Q = reward + (1 - done) * self.discount * target_Q
+            intr_Q = intrisic_reward + self.intr_gamma * target_Q
+            target_Q = extr_Q+intr_Q
+        # Get current Q estimates
+        current_Q1, current_Q2 = self.critic(state, action)
+
+        # Compute critic loss
+        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+
+        # Optimize the critic
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic_optimizer.step()
+
+        # Delayed policy updates
+        if self.total_it % self.policy_freq == 0:
+            # Compute actor loss
+            actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+            
+            # Optimize the actor 
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
+
+            # Update the frozen target models
+            for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
+                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+            for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
+                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+        return critic_loss
+
+
+
+    def train_rnd_network(self, experiences):
+        # Set the networks to the appropriate mode
+        self.rnd_predictor.train()
+        self.rnd_target.eval()
+
+        # Extract states from experiences
+        states, *_ = experiences
+        if self.use_rnd or self.adaptive_exploration: #it was only if self.use_rnd
+            states = ((states.cpu() - self.obss.mean) / self.obss.var**2)[0].float()
+            states= torch.clamp(states, -5, 5)
+            #new code, if the state containts low values, I scale them between -1 1
+            
+            #states = self.scale(state=states)
+
+        # Forward pass through the target network
+        with torch.no_grad():
+            target_outputs = self.rnd_target(states)
+
+        # Forward pass through the predictor network
+        predictor_outputs = self.rnd_predictor(states)
+
+        # Compute the loss between predictor and target outputs
+        l = self.rnd_loss(predictor_outputs, target_outputs)
+
+        # Backward pass and optimization step
+        self.rnd_optimizer.zero_grad()
+        l.backward()
+        clip_grad_norm_(self.rnd_predictor.parameters(), 1.0)  # Gradient clipping
+        self.rnd_optimizer.step()
+        return l
+
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")
         torch.save(self.critic_optimizer.state_dict(), filename + "_critic_optimizer")
@@ -286,3 +387,17 @@ class TD3(object):
         self.actor.load_state_dict(torch.load(filename + "_actor"))
         self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
         self.actor_target = copy.deepcopy(self.actor)
+
+
+    def scale(self, state, max_value = 5, min_value = - 5):
+        if torch.max(state) > 1: return state
+        t_min = torch.min(state)
+        t_max = torch.max(state)
+
+        # Apply min-max scaling to range [0, 1]
+        normalized_state = (state - t_min) / (t_max - t_min)
+
+        # Scale to range [min_value, max_value]
+        scaled_state = (max_value - min_value) * normalized_state + min_value
+
+        return scaled_state

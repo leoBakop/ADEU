@@ -120,10 +120,11 @@ class Agent:
         if self.adaptive_exploration or self.use_rnd:
             
             self.variance = 0
-            self.rnd_target = network.RND_Network(device=self.device, use_rnd=False, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device) if self.adaptive_exploration \
-                              else network.RND_Network(device=self.device, use_rnd=True, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
-            self.rnd_predictor = network.RND_Network(device=self.device, use_rnd=False, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device) if self.adaptive_exploration \
-                                else network.RND_NetworkPred(device=self.device, use_rnd=True, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
+            self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
+            torch.manual_seed(10 * (seed+1))
+            self.rnd_predictor = network.RND_NetworkPred(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
+            torch.manual_seed(seed)
+
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate)
             self.rnd_loss = MSELoss()
             self.decay = decay
@@ -132,10 +133,9 @@ class Agent:
             self.eps = .07
             self.obss = RunningMeanStd(shape= (1, inputs_shape)) #it was inside the following if
             if self.use_rnd:
-                
-                self.welford = welford.Welford()
-                self.gamma = 0.99
-                self.intr_gamma = 0.999
+                self.intr_rewards = RunningMeanStd()
+                self.gamma = 0.999
+                self.intr_gamma = 0.99
                 self.w_index = 0
         return
 
@@ -153,7 +153,7 @@ class Agent:
         returns always
         (the action that should be used/train the network with)
         """
-        if self.use_rnd: return self.get_prediction(state)[3] #if the efficiency of the rnd changes, it is because of that
+        if self.use_rnd: return self.get_prediction(state)[0] #if the efficiency of the rnd changes, it is because of that
         if not self.adaptive_exploration:
             v = self.model.get_noise_cov()
             v = v.detach().cpu().numpy().reshape(v.shape[-1], v.shape[-1])
@@ -165,18 +165,20 @@ class Agent:
         s = (state - self.obss.mean )/ self.obss.var**2
         s = s[0].float()
         s = torch.clamp(s, min = -5, max = 5)
-        s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
+        #s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
         variance = self.calculate_intrisic_reward(s) #it was just state
         #variance = .1 in case of constant variance
         self.variance = variance #self.variance servs as a buffer
         action = self.get_prediction(state)[3].detach().cpu()
-        if np.random.rand()< self.eps: return MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample() 
-        
-        #variance = max(variance, self.eps)
+        if np.random.rand()< self.eps: 
+            expl_action = MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample()
+            expl_action = torch.clamp(expl_action, min = - self.max_speed, max = self.max_speed)
+            return expl_action
         if variance == 0: return action
         
         dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
         expl_action = dist.sample()
+        expl_action = torch.clamp(expl_action, min = - self.max_speed, max = self.max_speed)
         return expl_action
     
 
@@ -188,8 +190,11 @@ class Agent:
             variance = np.absolute(self.rnd_predictor(state).detach().cpu() - self.rnd_target(state).detach().cpu())
         self.rnd_predictor.train()
         self.rnd_target.train()
-        #variance = np.clip(variance, a_min = - self.max_speed, a_max = self.max_speed) #beacuse the we will clip the exploration action when needed
-        return variance
+        variance = np.clip(variance, a_min = - 2*self.max_speed, a_max = 2*self.max_speed) #just to avoid the infinite variance
+        if torch.isnan(variance).any():
+            print('debug')
+            variance = self.max_speed
+        return variance**2
     
     def get_variance(self):
         return self.variance
@@ -210,30 +215,23 @@ class Agent:
             #the 'sample average' and 'sample std' to increase the computational efficiency
             #instead of witing code we are going to use the welford algorithm via its package
             self.obss.update(state.numpy())
-            #s = state #that was the correct now I am testing following line
             s = next_state
             s = (s - self.obss.mean )/ self.obss.var**2
             s = s[0].float()
             s = torch.clamp(s, min = -5, max = 5)
-            s = self.scale(s) #scale between -1 1 if the values are too low
+            #s = self.scale(s) #scale between -1 1 if the values are too low
 
             intrisic_reward = self.calculate_intrisic_reward(s)
             #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
             self.variance = intrisic_reward**2 #self.variance servs as a buffer
+            self.intr_rewards.update(self.variance)
+            self.variance /= self.intr_rewards.mean
             self.w_index+=1
             #if self.w_index > 10: intrisic_reward/=self.welford.var_s[1]
             self.replay_memory.add(state, action, reward, next_state, done, self.variance)
         else:
             self.replay_memory.add(state, action, reward, next_state, done)
         
-        if(episode == self.cut_training and not self.exploration_terminated): 
-            
-            print("--------------------10 episodes to testing--------------------")
-            self.exploration_terminated = True
-            self.optimizer.param_groups[0]['lr'] *=.1 
-            self.terminate_training(episode)
-
-        if (episode == self.end_training):   self.terminate_training(episode) 
        
         # If enough samples are available in replay_memory, get random subset and learn
         if len(self.replay_memory) > self.min_mem_size and timestep % self.train_frequency == 0:
@@ -252,7 +250,7 @@ class Agent:
                                                                                 target_network = self.target_model,
                                                                                 optim = self.optimizer)    
                 Q_losses.append(loss)
-            if self.adaptive_exploration or self.use_rnd: l =self.train_rnd_network(experiences)
+            if (self.adaptive_exploration or self.use_rnd) and (timestep % 2*self.train_frequency == 0): l =self.train_rnd_network(experiences)
             return np.mean(Q_losses), l
         return 0.0, l
 
@@ -356,7 +354,8 @@ class Agent:
             states = ((states.cpu() - self.obss.mean) / self.obss.var**2)[0].float()
             states= torch.clamp(states, -5, 5)
             #new code, if the state containts low values, I scale it between -1 1
-            states = self.scale(state=states)
+            
+            #states = self.scale(state=states)
 
         # Forward pass through the target network
         with torch.no_grad():
@@ -371,6 +370,7 @@ class Agent:
         # Backward pass and optimization step
         self.rnd_optimizer.zero_grad()
         l.backward()
+        clip_grad_norm_(self.rnd_predictor.parameters(), 1.0)  # Gradient clipping
         self.rnd_optimizer.step()
         return l
 

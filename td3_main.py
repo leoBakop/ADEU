@@ -5,7 +5,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 from td3_agent import TD3
-from combined_agent import Pretrained_Agent
+from combined_agent import Pretrained_TD3_Agent
 import pickle
 import os
 from copy import copy
@@ -17,6 +17,8 @@ from gym.wrappers import RecordVideo
 from tqdm import tqdm
 import random
 from gymnasium.wrappers import TransformObservation
+from network import UNCERTAINTY
+
 
 
 
@@ -48,7 +50,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
 
     #just for printing
     arguments = {
-        'Boltz+ade':comb,
+        'Baseline+ade':comb,
         'ade': ade,
         'rnd':use_rnd,
         'noisy_nets':noisy_nets,
@@ -80,6 +82,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "state_dim": len(observation),
     "action_dim": env.action_space.shape[0],
     "max_action": env.action_space.high[0],
+    'seed':seed,
     "discount": 0.99,
     "tau": 0.005,
     "policy_noise":0.2,
@@ -95,14 +98,17 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
-
-    agent = (TD3(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = 0.03))
+    if not comb: pretraining = 0
+    else: pretraining = .03 if domain != 'HalfCheetah-v4' else 0.2 
+    agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = 0.03))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
         run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label)
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
-    store(f"./experiments/{domain}/{label}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
+    agent_params['networks_uncertainty'] = UNCERTAINTY
+    agent_params['pretraining_time'] = pretraining
+    store(f"./experiments/TD3/{domain}/{label}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
     env.close()
     return mean_evaluation_rewards
 
@@ -169,7 +175,7 @@ def wandb_session(domain , seed = 0, name = None, code = 0):
     # start a new wandb run to track this script
     wandb.init(
         # set the wandb project where this run will be logged
-        project=f"AAAI| TD3, Adaptive Exploration {domain}",
+        project=f"AAAI final exps| TD3, Adaptive Exploration {domain}",
         name = name,
         # track hyperparameters and run metadata
         config={
@@ -230,10 +236,11 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
     np.save(path+'/stored_data/timestep_with_maximum_varience.npy', arg_var_per_epsiode)
     np.save(path+'/stored_data/maximum_varience', var_per_episode)
     
-    full_path = f"{path}+/hyperparameters.txt"
-    
-    with open(full_path, 'wb') as f:
-        pickle.dump(params, f)
+    full_path = path + "/hyperparameters.txt"
+
+    with open(full_path, 'w') as f:
+        for key, value in params.items():
+            f.write(f"{key}: {value}\n")
 
     return
 def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False):
@@ -252,7 +259,7 @@ if __name__ == '__main__':
     parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--noisy_nets', action='store_true', default=False)
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
-    parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--dom', type=str, default='MountainCarContinuous-v0', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
    
     args = parser.parse_args()
@@ -265,13 +272,13 @@ if __name__ == '__main__':
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
     comb = args.comb
-    horizon = int(50_000_000 / timesteps) #hopeer:50M  fetch reach 15M, cheetah 7M
+    horizon = int(4_000_000 / timesteps) #hopeer:20M  fetch reach 15M, cheetah 2M
     if timesteps <= 200:
         horizon = int(horizon/10)
 
         
 
-    seeds = 1
+    seeds = 3
     
     mean_evaluation_rewards = []
 

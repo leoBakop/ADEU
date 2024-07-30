@@ -18,7 +18,7 @@ from gym.wrappers import RecordVideo
 from tqdm import tqdm
 import random
 from gymnasium.wrappers import TransformObservation
-
+from network import UNCERTAINTY
 
 
 def set_seed(seed):
@@ -56,10 +56,11 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
         'Bolz': (not ade) and (not use_rnd) and (not noisy_nets) and (not comb)
     }
     label = [a for a in arguments.keys() if arguments[a] ][0]
-    name = f'naf, using {label}, seed:{seed}'
+    name = f'{label}, seed:{seed}'
     wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb))
-    
-    
+    path = f"./experiments/naf/{domain}/{label}/seed_{seed}"
+    if not os.path.exists(path+'/stored_data'):
+        os.makedirs(path+'/stored_data')
     
     env = gym.make(domain, **kwargs)
     eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
@@ -96,7 +97,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "gamma": 0.99,
     "c": c,
     "min_mem_size": batch_size,
-    "learning_rate": 1e-4,  # robotics is with e-3, cheetah with e-4
+    "learning_rate": 1e-3,  #everything is with -4 except mountain car which is -3
     "tau": 0.001,  # it was 0.005
     "action_size": env.action_space.shape[0],
     "path": None,
@@ -109,7 +110,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "cut_training": cut_training,
     "end_training": end_training,
     "evaluation_c": 0,
-    "train_frequency": 16,  # For all other domains it was 1, for cheetah it is 8
+    "train_frequency": 1,  # 16 for everything except mount car which is 1
     "adaptive_exploration": adaptive_exploration,
     "decay": int(0.05 * horizon * timesteps),
     "use_rnd": use_rnd,
@@ -119,15 +120,16 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = 0.03))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
-        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label)
+        run(**kwargs, path = path, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label)
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
-    store(f"./experiments/{domain}/{label}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
+    agent_params['networks_uncertainty'] = UNCERTAINTY
+    store(path = path, mean_reward = mean_reward, rewards=rewards, mean_evaluation_rewards=mean_evaluation_rewards, evaluation_rewards=evaluation_rewards,  evaluation_duration=evaluation_duration, cum_evaluation_rewards=cum_evaluation_rewards, arg_var_per_epsiode=arg_var_per_epsiode, var_per_episode=var_per_episode, params = agent_params)    
     env.close()
     return mean_evaluation_rewards
 
 
-def run(env, eval_env, domain, horizon, agent:Agent, timesteps, adaptive_exploration,use_rnd ,label, **kwargs):
+def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_exploration,use_rnd ,label, **kwargs):
     mean_reward = np.zeros(horizon)
     percentage = 1
     mean_evaluation_rewards = np.zeros(int(percentage*horizon/100)+100)
@@ -179,6 +181,7 @@ def run(env, eval_env, domain, horizon, agent:Agent, timesteps, adaptive_explora
                 mean_reward[episode] = total_reward/(t+1)
                 #wandb.log({domain+"mean_reward": total_reward/(t+1), "loss": loss/(t+1)})
                 break
+        if (episode % int(.05 * horizon)) == 0: np.save(path+f'/stored_data/variance_of_{episode}th_episode.npy', var)
         arg_var_per_episode[episode] = np.argmax(var)
         var_per_episode[episode] = np.max(var)
     env.close()
@@ -190,7 +193,7 @@ def wandb_session(domain , seed = 0, name = None, code = 0):
     # start a new wandb run to track this script
     wandb.init(
         # set the wandb project where this run will be logged
-        project=f"AAAI| NAF, Adaptive Exploration {domain}",
+        project=f"AAAI final exps| NAF, Adaptive Exploration {domain}",
         name = name,
         # track hyperparameters and run metadata
         config={
@@ -252,10 +255,12 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
     np.save(path+'/stored_data/timestep_with_maximum_varience.npy', arg_var_per_epsiode)
     np.save(path+'/stored_data/maximum_varience.npy', var_per_episode)
     
-    full_path = path+"/hyperparameters.txt"
-    
-    with open(full_path, 'wb') as f:
-        pickle.dump(params, f)
+
+    full_path = path + "/hyperparameters.txt"
+
+    with open(full_path, 'w') as f:
+        for key, value in params.items():
+            f.write(f"{key}: {value}\n")
 
     return
 def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False):
@@ -287,7 +292,7 @@ if __name__ == '__main__':
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
     comb = args.comb
-    horizon = int(50_000_000 / timesteps) #hopeer:50M  fetch reach 15M, cheetah 7M
+    horizon = int(10_000_000 / timesteps) #everythin is 50M except mountain car which is 10
     if timesteps <= 200:
         horizon = int(horizon/10)
 

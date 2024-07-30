@@ -165,47 +165,57 @@ class NAF(nn.Module):
 
 
 
+UNCERTAINTY = 150
+
 class RND_Network(nn.Module):
-    def __init__(self, device, use_rnd, input_size = 10, hidden_size = 64, max_speed = 1):
+    def __init__(self, device, input_size = 10, hidden_size = 64, max_speed = 1):
         super(RND_Network, self).__init__()
         self.device = device
         self.max_speed = max_speed
-        self.use_rnd = use_rnd
         # Define the layers
         hidden_size *= 2
         self.fc1 = nn.Linear(input_size, hidden_size)  
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.output = nn.Linear(hidden_size, 1)
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         x = x.to(self.device)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = self.output(x)
-        if self.use_rnd: return 2*self.max_speed*(self.sigmoid(x)-0.5)
-        #x = 4**(2*self.max_speed)*(self.sigmoid(x)-0.5)
-        x = 2*self.max_speed*(self.sigmoid(x)-0.5)
+        x = UNCERTAINTY * self.output(x)
+        
         return x
     
 
 class RND_NetworkPred(nn.Module):
-    def __init__(self, device, use_rnd = True, input_size = 10, hidden_size = 64, max_speed = 1):
+    def __init__(self, device, input_size = 10, hidden_size = 64, max_speed = 1):
         super(RND_NetworkPred, self).__init__()
         self.device = device
         self.max_speed = max_speed
-        self.use_rnd = use_rnd
         # Define the layers
         hidden_size *= 2
         self.fc1 = nn.Linear(input_size, hidden_size)  
+        self.fc2 = nn.Linear(hidden_size, 2*hidden_size)
+        self.fc3 = nn.Linear(2*hidden_size, 2*hidden_size)
+        self.fc4 = nn.Linear(2*hidden_size, hidden_size)
+        self.fc5 = nn.Linear(hidden_size, hidden_size)
         self.output = nn.Linear(hidden_size, 1)
-        self.sigmoid = nn.Sigmoid()
+        # Initialize weights
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         x = x.to(self.device)
         x = F.relu(self.fc1(x))
-        x = self.output(x)
-        if self.use_rnd: return 2*self.max_speed*(self.sigmoid(x)-0.5)
-        x = 2*self.max_speed*(self.sigmoid(x)-0.5)
-        #x = 4**(2*self.max_speed)*(self.sigmoid(x)-0.5)
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = F.relu(self.fc4(x))
+        x = F.relu(self.fc5(x))
+        x = UNCERTAINTY * self.output(x)
         return x
