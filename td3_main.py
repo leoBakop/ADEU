@@ -98,9 +98,8 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
-    if not comb: pretraining = 0
-    else: pretraining = .03 if domain != 'HalfCheetah-v4' else 0.2 
-    agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = 0.03))
+    pretraining = 0.03
+    agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
         run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label)
@@ -108,7 +107,10 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     agent_params['timesteps'] = timesteps
     agent_params['networks_uncertainty'] = UNCERTAINTY
     agent_params['pretraining_time'] = pretraining
-    store(f"./experiments/TD3/{domain}/{label}/seed_{seed}", mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
+    filename = f"./experiments/TD3/{domain}/{label}/seed_{seed}"
+    store(filename, mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
+    
+    if not comb: store_network(agent=agent, path = filename)
     env.close()
     return mean_evaluation_rewards
 
@@ -224,6 +226,12 @@ def make_evaluation_env(dom, iterations, episode, label, **kwargs):
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/TD3/{dom}/{label}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
+
+def store_network(agent:TD3, path):
+      if not os.path.exists(path): os.makedirs(path)
+      agent.save(path)
+
+
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params):
     if not os.path.exists(path+'/stored_data'):
         os.makedirs(path+'/stored_data')
@@ -272,7 +280,7 @@ if __name__ == '__main__':
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
     comb = args.comb
-    horizon = int(4_000_000 / timesteps) #hopeer:20M  fetch reach 15M, cheetah 2M
+    horizon = int(20_000_000 / timesteps) #hopeer:20M  fetch reach 15M, cheetah 4M, 20M: iverted double pendalum
     if timesteps <= 200:
         horizon = int(horizon/10)
 
