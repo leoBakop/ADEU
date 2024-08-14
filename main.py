@@ -17,10 +17,6 @@ def main():
     #declaration of the testing algorithms
     per = False
     
-    
-
-
- 
 
     ##for the storing/loaded section
     first_time = True #only this should be changed
