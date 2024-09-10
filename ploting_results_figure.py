@@ -3,17 +3,21 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 def plot_images_from_folder(folder_path, save_path):
+    l_png_files = []
     # List all files in the given folder
     files = os.listdir(folder_path)
     
     # Filter out only .png files
     png_files = [file for file in files if file.endswith('.png')]
-    
     # Sort the files to ensure consistent order
     png_files.sort()
+    for i in range(int(len(png_files)/2)):
+        l_png_files.append(png_files[i])
+        l_png_files.append(png_files[i+4])
 
-    # Create a 2x4 subplot
-    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    png_files = l_png_files    
+    # Create a 4x2 subplot (4 rows, 2 columns)
+    fig, axes = plt.subplots(4, 2, figsize=(50, 50))  # Adjusted figsize for larger subplots
     
     # Loop over the axes and the png files together
     for ax, png_file in zip(axes.flatten(), png_files):
@@ -24,13 +28,13 @@ def plot_images_from_folder(folder_path, save_path):
         # Remove the axis
         ax.axis('off')
         # Optionally, set the title as the filename
-        #ax.set_title(png_file)
+        # ax.set_title(png_file)
 
+    # Adjust layout to reduce space between columns and prevent overlap
+    plt.tight_layout(rect=[0, 0, 1, 1])
+    
     # Add a main title to the figure
-    plt.suptitle('Results in all the Tested Domains', fontsize=16)
-
-    # Adjust layout to prevent overlap
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    #plt.suptitle('Results in all the Tested Domains', fontsize=24)
 
     # Save the figure
     plt.savefig(save_path)
@@ -39,7 +43,6 @@ def plot_images_from_folder(folder_path, save_path):
     plt.show()
 
 # Specify the folder path containing the images and the path to save the plot
-
 folder_path = './huge_figure'
 save_path = f'{folder_path}/full_results.png'
 
