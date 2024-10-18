@@ -81,7 +81,7 @@ class Priorized_Experience_Replay():
         else:
             self.memory.append([state, action, reward, next_state, done])  
         #set a maximum propabillity (in order to train at least one time)
-        max_prio = self.priorities.max() if self.memory else 1.0
+        max_prio = self.priorities.max() if self.priorities.max() > 0 else 1.0
         self.priorities[self.index] = max_prio
         #update the index
         self.index = (self.index + 1)%self.buffer_size
