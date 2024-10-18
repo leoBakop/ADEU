@@ -41,7 +41,7 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwargs):
+def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_rnd, per, **kwargs):
     set_seed(seed)
     adaptive_exploration = ade
     #kwargs={
@@ -93,6 +93,8 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "batch_size": batch_size,
     "min_mem_size": batch_size,
     "buffer_size": 1e+5,
+    "mod_rnd":mod_rnd,
+    "per":per,
     "adaptive_exploration": adaptive_exploration,
     "decay": int(0.05 * horizon * timesteps),
     "use_rnd": use_rnd,
@@ -105,7 +107,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
-        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, path = filename)
+        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, path = filename, mod_rnd = mod_rnd)
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
     agent_params['networks_uncertainty'] = UNCERTAINTY
@@ -118,7 +120,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     return mean_evaluation_rewards
 
 
-def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path,  **kwargs):
+def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd,  **kwargs):
     mean_reward = np.zeros(horizon)
     percentage = 1
     mean_evaluation_rewards = np.zeros(int(percentage*horizon/100)+100)
@@ -146,6 +148,8 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
             wandb.log({'Critic network loss': network_loss/(100//percentage)})
             summed_reward = 0
             network_loss = 0
+            if mod_rnd: agent.evaluate_rnd_netowrk(rnd_loss = arg_var_per_episode[episode -1 if episode > 0 else 0])
+
             tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
@@ -191,11 +195,10 @@ def wandb_session(domain , seed = 0, name = None, code = 0):
     # start a new wandb run to track this script
     wandb.init(
         # set the wandb project where this run will be logged
-        project=f"AAAI final exps| TD3, Adaptive Exploration {domain}",
+        project=f"Post AAMAS| TD3, Adaptive Exploration {domain}",
         name = name,
         # track hyperparameters and run metadata
         config={
-        "domain": domain,
         "seed": seed,
         "code":code
         }
@@ -244,7 +247,9 @@ if __name__ == '__main__':
     parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--noisy_nets', action='store_true', default=False)
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
-    parser.add_argument('--dom', type=str, default='MountainCarContinuous-v0', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
+    parser.add_argument('--per', action='store_true', default=True, help='Would you like to Use the prioritized Experience Replay Buffer')
+    parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
    
     args = parser.parse_args()
@@ -257,6 +262,8 @@ if __name__ == '__main__':
     max_episode_steps = timesteps
     noisy_nets = args.noisy_nets
     comb = args.comb
+    mod_rnd = args.mod_rnd
+    per = args.per
     horizon = int(40_000_000 / timesteps) #hopeer:20M  fetch reach 15M, cheetah 4M, 20M: iverted double pendalum
     if timesteps <= 200:
         horizon = int(horizon/10)
@@ -267,7 +274,7 @@ if __name__ == '__main__':
     
     mean_evaluation_rewards = []
 
-    print(f"{domain} + code:{code_creation(adaptive_exploration=ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb)}")
+    print(f"{domain} + code:{code_creation(adaptive_exploration=ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb, per=per, mod_rnd=mod_rnd)}")
 
     for s in range(seeds):
-        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, ade = ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb =comb)
+        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, ade = ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb =comb, per=per, mod_rnd = mod_rnd)

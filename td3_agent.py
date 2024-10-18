@@ -3,13 +3,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from replay_buffer import ReplayBuffer
+from replay_buffer import ReplayBuffer, Priorized_Experience_Replay
 import network
 from torch.distributions import MultivariateNormal
 import welford
 from gym.wrappers.normalize import RunningMeanStd
 from torch.nn.utils import clip_grad_norm_
 from torchrl.modules import NoisyLinear
+
 
 
 
@@ -83,6 +84,8 @@ class TD3(object):
         batch_size = 256,
         min_mem_size = 256,
         buffer_size =1e+5,
+        per = False,
+        mod_rnd = False,
         adaptive_exploration = True,
         decay = 1e+6,
         use_rnd = False,
@@ -110,13 +113,27 @@ class TD3(object):
         self.policy_freq = policy_freq
         self.min_mem_size = min_mem_size
         self.train_frequency = train_frequency
-        self.buffer = ReplayBuffer(buffer_size=int(buffer_size), batch_size=int(batch_size), device = self.device, store_intrisic=use_rnd)
+        self.per = per
+
+        if not self.per:
+            self.buffer = ReplayBuffer(buffer_size=int(buffer_size), batch_size=int(batch_size), device = self.device, store_intrisic=use_rnd)
+        else:
+             self.replay_memory = Priorized_Experience_Replay(buffer_size=int(buffer_size), batch_size=int(batch_size),device=self.device,offset=1e-6)
+
         self.total_it = 0
         #Algorithm used for this run
         self.adaptive_exploration = adaptive_exploration
         self.use_rnd = use_rnd
         self.use_noisy_nets = use_noisy_nets
         self.variance = self.policy_noise
+        
+        self.mod_rnd = mod_rnd
+        if self.mod_rnd:
+            self.rnd_low_threshold = 0.2
+            self.rnd_high_threshold = 500
+            self.uncertainty_const = 1.01
+        
+        
         ####################################################
         if self.adaptive_exploration or self.use_rnd:
             hidden_layer = 256
@@ -231,6 +248,8 @@ class TD3(object):
     
             if self.use_rnd:
                 loss= self.train_using_rnd( experiences)
+            elif self.per:
+                self.train_basic_per(experiences)
             else:
                 loss = self.train_basic(experiences)    
             
@@ -287,6 +306,79 @@ class TD3(object):
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
         return critic_loss
+
+
+    def evaluate_rnd_netowrk(self, rnd_loss):
+        if not self.mod_rnd: 
+            print('Something wrong with the mod rnd')
+            return
+        if self.rnd_predictor.get_uncertainty() != self.rnd_target.get_uncertainty():
+            print('Something wrong with the synchronization of the rnd')
+            return
+        unc = self.rnd_predictor.get_uncertainty()
+
+        if rnd_loss < self.rnd_low_threshold:
+             unc = (unc * self.uncertainty_const)
+             self.rnd_predictor.set_uncertainty(unc)
+             self.rnd_target.set_uncertainty(unc)
+        elif rnd_loss > self.rnd_high_threshold:
+            unc = (unc/self.uncertainty_const)
+            self.rnd_predictor.set_uncertainty(unc)
+            self.rnd_target.set_uncertainty(unc)
+        return
+
+
+    def train_basic_per(self, experiences):
+        self.total_it += 1
+
+        # Sample replay buffer 
+        state, action, reward, next_state, done, idx, weights = experiences
+        with torch.no_grad():
+            # Select action according to policy and add clipped noise
+            noise = (
+                torch.randn_like(action.float()) * self.policy_noise
+            ).clamp(-self.noise_clip, self.noise_clip)
+            
+            next_action = (
+                self.actor_target(next_state) + noise
+            ).clamp(-self.max_action, self.max_action)
+
+            # Compute the target Q value
+            target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+            target_Q = torch.min(target_Q1, target_Q2)
+            target_Q = reward + (1 - done) * self.discount * target_Q
+
+        # Get current Q estimates
+        current_Q1, current_Q2 = self.critic(state, action)
+
+        # Compute critic loss
+        td_error = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+        weights = torch.from_numpy(weights).to(self.device)
+        critic_loss = (td_error*weights).mean().to(self.device)
+        # Optimize the critic
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic_optimizer.step()
+
+        self.replay_memory.update_priorities(idx, abs(td_error.data.cpu().numpy()))
+        # Delayed policy updates
+        if self.total_it % self.policy_freq == 0:
+            # Compute actor loss
+            actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+            
+            # Optimize the actor 
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
+
+            # Update the frozen target models
+            for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
+                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+            for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
+                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+        return critic_loss
+
 
 
     def train_using_rnd(self, experiences):
