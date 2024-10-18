@@ -55,15 +55,14 @@ class ReplayBuffer:
 
 
 class Priorized_Experience_Replay():
-    def __init__(self,buffer_size, batch_size, device, seed, offset, probabilities, index):
+    def __init__(self,buffer_size, batch_size, device, offset):
 
         self.device = device
         self.memory = deque(maxlen=buffer_size)
-        self.priorities = np.zeros((buffer_size,), dtype=np.float32)  if probabilities is None else probabilities
+        self.priorities = np.zeros((buffer_size,), dtype=np.float32)
         self.batch_size = batch_size
-        self.seed = seed
         self.buffer_size = buffer_size
-        self.index=index if index !=0 else 0
+        self.index= 0
         self.alpha = 0
         self.beta = 0
         self.offset = offset
@@ -86,7 +85,6 @@ class Priorized_Experience_Replay():
         self.priorities[self.index] = max_prio
         #update the index
         self.index = (self.index + 1)%self.buffer_size
-
         return
     
     def sample(self):
@@ -125,3 +123,5 @@ class Priorized_Experience_Replay():
     def __len__(self):
         """Return the current size of internal memory."""
         return len(self.memory)
+    
+

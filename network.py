@@ -87,7 +87,7 @@ class DeepNAF(nn.Module):
         return action, Q, V, action_value
         
 class NAF(nn.Module):
-    def __init__(self, state_size, action_size, layer_size_1, layer_size_2, seed,device, c = 1.0, max_speed = 1, noisy_nets = False):
+    def __init__(self, state_size, action_size, layer_size_1, layer_size_2,device, c = 1.0, max_speed = 1, noisy_nets = False):
         super(NAF, self).__init__()
         self.input_shape = state_size
         self.action_size = action_size
@@ -165,7 +165,7 @@ class NAF(nn.Module):
 
 
 
-UNCERTAINTY = 200
+UNCERTAINTY = 125
 
 class RND_Network(nn.Module):
     def __init__(self, device, input_size = 10, hidden_size = 64, max_speed = 1):
@@ -177,15 +177,21 @@ class RND_Network(nn.Module):
         self.fc1 = nn.Linear(input_size, hidden_size)  
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.output = nn.Linear(hidden_size, 1)
+        self.set_uncertainty(UNCERTAINTY)
 
     def forward(self, x):
         x = x.to(self.device)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = UNCERTAINTY * self.output(x)
+        x = self.uncertainty * self.output(x)
         
         return x
     
+
+    def set_uncertainty(self,uncertainty):
+        self.uncertainty = uncertainty
+    def get_uncertainty(self):
+        return self.uncertainty
 
 class RND_NetworkPred(nn.Module):
     def __init__(self, device, input_size = 10, hidden_size = 64, max_speed = 1):
@@ -200,6 +206,7 @@ class RND_NetworkPred(nn.Module):
         self.fc4 = nn.Linear(2*hidden_size, hidden_size)
         self.fc5 = nn.Linear(hidden_size, hidden_size)
         self.output = nn.Linear(hidden_size, 1)
+        self.set_uncertainty(UNCERTAINTY)
         # Initialize weights
         self._initialize_weights()
 
@@ -217,5 +224,11 @@ class RND_NetworkPred(nn.Module):
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
         x = F.relu(self.fc5(x))
-        x = UNCERTAINTY * self.output(x)
+        x = self.uncertainty * self.output(x)
         return x
+    
+
+    def set_uncertainty(self,uncertainty):
+        self.uncertainty = uncertainty
+    def get_uncertainty(self):
+        return self.uncertainty

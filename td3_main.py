@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import sys
 from td3_agent import TD3
 from combined_agent import Pretrained_TD3_Agent
-import pickle
 import os
 from copy import copy
 import gymnasium as gym
@@ -18,6 +17,7 @@ from tqdm import tqdm
 import random
 from gymnasium.wrappers import TransformObservation
 from network import UNCERTAINTY
+from td3_evaluate import evaluate
 
 
 
@@ -99,15 +99,18 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     "use_noisy_nets": noisy_nets
     }
     pretraining = 0.05
+    filename = f"./experiments/TD3/{domain}/{label}/seed_{seed}"
+    if not os.path.exists(filename+'/stored_data'):
+        os.makedirs(filename+'/stored_data')
     agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
-        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label)
+        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, path = filename)
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
     agent_params['networks_uncertainty'] = UNCERTAINTY
     agent_params['pretraining_time'] = pretraining
-    filename = f"./experiments/TD3/{domain}/{label}/seed_{seed}"
+    
     store(filename, mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
     
     if not comb: store_network(agent=agent, path = filename)
@@ -115,7 +118,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, **kwa
     return mean_evaluation_rewards
 
 
-def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, **kwargs):
+def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path,  **kwargs):
     mean_reward = np.zeros(horizon)
     percentage = 1
     mean_evaluation_rewards = np.zeros(int(percentage*horizon/100)+100)
@@ -127,6 +130,9 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
     arg_var_per_episode = np.zeros(horizon) #stores in which timestep of each episode the agent has the biggest uncertainty
     var_per_episode = np.zeros(horizon)
     rnd_loss = 0
+    summed_reward = 0
+    tmp_network_loss = 0
+    network_loss = 0
 
     
 
@@ -136,6 +142,10 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
             wandb.log({"timestep with max uncertanty": arg_var_per_episode[episode -1 if episode > 0 else 0]})
             wandb.log({"max uncertanty": var_per_episode[episode -1 if episode > 0 else 0]})
             wandb.log({'error of the rnd network': rnd_loss})
+            wandb.log({'reward during training': summed_reward /(100//percentage)})
+            wandb.log({'Critic network loss': network_loss/(100//percentage)})
+            summed_reward = 0
+            network_loss = 0
             tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
@@ -153,9 +163,10 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
             observation, reward, done, truncated, info = env.step(action)
             if isinstance(observation, dict):
                 observation = np.concatenate([arr for arr in observation.values()])
-            _, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done, timestep=t) #push that in memory
+            tmp_network_loss, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done, timestep=t) #push that in memory
             #just to have a good plotting
             rnd_loss = tmp_rnd_loss if (adaptive_exploration or use_rnd) and tmp_rnd_loss > 0 else rnd_loss
+            network_loss += tmp_network_loss
             current_observation = torch.FloatTensor(observation)
 
             #statistics
@@ -164,10 +175,13 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
             #wandb.log({domain+"rewards": reward})
             if done or truncated:
                 mean_reward[episode] = total_reward/(t+1)
-                #wandb.log({domain+"mean_reward": total_reward/(t+1), "loss": loss/(t+1)})
+                summed_reward+=total_reward
                 break
         arg_var_per_episode[episode] = np.argmax(var)
         var_per_episode[episode] = np.max(var)
+        
+        if (episode % int(.05 * horizon)) == 0:
+            np.save(path + f'/stored_data/uncertainty_of_{episode}th_episode.npy', var)
     env.close()
     eval_env.close()
     wandb.finish()
@@ -187,45 +201,6 @@ def wandb_session(domain , seed = 0, name = None, code = 0):
         }
     )
     
-def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, iterations,**kwargs):
-    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, label = label, **kwargs)
-    mean_reward = np.zeros(evaluation_episodes)
-    mean_timesteps = np.zeros(evaluation_episodes)
-    mean_sum_reward = np.zeros(evaluation_episodes)
-
-    average_rewards = np.zeros(timesteps)
-    for episode in range(evaluation_episodes):
-        current_observation, info = env.reset()
-        if isinstance(current_observation, dict):
-            current_observation = np.concatenate([arr for arr in current_observation.values()])
-
-        current_observation = torch.FloatTensor(current_observation)
-        total_reward = 0
-        for t in range(timesteps):
-            action = agent.get_clear_action(current_observation)# User-defined policy function
-            observation, reward, done, truncated, info = env.step(action) 
-            if isinstance(observation, dict):
-                observation = np.concatenate([arr for arr in observation.values()])
-            current_observation = torch.FloatTensor(observation)
-            total_reward += reward
-            average_rewards[t] += reward/evaluation_episodes
-            #if episode == 0:
-                #wandb.log({domain+'evaluation_rewards':reward})
-            if done or truncated:
-                mean_timesteps[episode] = t+1
-                mean_reward[episode] = total_reward/(t+1)
-                mean_sum_reward[episode] = total_reward
-                break
-    wandb.log({domain+"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
-    env.close()
-    return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
-
-def make_evaluation_env(dom, iterations, episode, label, **kwargs):
-    eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
-    if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/TD3/{dom}/{label}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
-    return eval_env
-
 
 def store_network(agent:TD3, path):
       if not os.path.exists(path): os.makedirs(path)
@@ -233,8 +208,7 @@ def store_network(agent:TD3, path):
 
 
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params):
-    if not os.path.exists(path+'/stored_data'):
-        os.makedirs(path+'/stored_data')
+    
     np.save(path+'/stored_data/mean_reward.npy', mean_reward)
     np.save(path+'/stored_data/rewards.npy', rewards)
     np.save(path+'/stored_data/mean_evaluation_rewards.npy', mean_evaluation_rewards)
@@ -251,15 +225,18 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
             f.write(f"{key}: {value}\n")
 
     return
-def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False):
+def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False, mod_rnd = False, per = False):
+    retval = 20 if mod_rnd else 0
+    retval+= 100 if per else 0
+    if mod_rnd and retval: sys.exit(-1)
     if comb:
         if not adaptive_exploration: sys.exit(-1)
-        return 4
-    if noisy_nets:return 3
-    if adaptive_exploration: return 1
-    if use_rnd: return 2
-    return 0
-
+        return retval + 4
+    if noisy_nets:return retval + 3
+    if adaptive_exploration: return retval + 1
+    if use_rnd: return retval + 2
+    if mod_rnd: sys.exit(-1)
+    return 0 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments

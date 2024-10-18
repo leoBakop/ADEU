@@ -15,28 +15,27 @@ from gym.wrappers.normalize import RunningMeanStd
 
 class Agent:
     def __init__(self, inputs_shape, hidden_layer_1,hidden_layer_2,
-                    use_priorized_exp_replay, max_speed,
-                    batch_size = 128, min_mem_size = 98, 
-                    learning_rate = 0.001, gamma = 0.99,
-                    update_target_every = 5, clip_grad = 1.0,
-                    c = 1.0,action_size = 2,
+                    use_priorized_exp_replay, 
+                    max_speed,
+                    batch_size = 128, 
+                    min_mem_size = 98, 
+                    learning_rate = 0.001, 
+                    gamma = 0.99,
+                    update_target_every = 5, 
+                    clip_grad = 1.0,
+                    c = 1.0,
+                    evaluation_c = 0,
+                    action_size = 2,
                     memory_size = 100_000,
-                    seed = 0,
-                    cut_training = 150,
-                    end_training = 550,
-                    evaluation_c = 10 ** (-5),
                     train_frequency = 1,
+                    seed = 0,
                     #variables for the priorzed experience replay
                     tau = .005,
                     alpha = .7,
                     beta = 0.5,
-                    #network variables for storing, and loading an existing network
-                    path = None,
-                    loaded_mem = None,
-                    probabilities = None, 
-                    index = 0,
                     #for the adaptive expploration
                     adaptive_exploration = True,
+                    mod_rnd = False,
                     decay = 1_000_000,
                     use_rnd = False,
                     use_noisy_nets = False
@@ -57,15 +56,13 @@ class Agent:
             return
         
         self.model = network.NAF(state_size = inputs_shape, action_size=action_size, layer_size_1 = hidden_layer_1,
-                                    layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, seed = seed, device = self.device).to(self.device)
+                                    layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, device = self.device).to(self.device)
         
         #this predicts in every step and change its weights periodically
         self.target_model = network.NAF(state_size = inputs_shape, action_size=action_size, layer_size_1 = hidden_layer_1,
-                                    layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, seed = seed, device = self.device).to(self.device)
+                                    layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, device = self.device).to(self.device)
         
-        if path is not None:
-            self.model.load_state_dict(torch.load(path))
-            self.target_model.load_state_dict(torch.load(path))
+
 
         #miscellaneous for networks
         self.evaluation_c = evaluation_c
@@ -81,8 +78,7 @@ class Agent:
         
         #miscellaneous for the functionallity of the agent
         self.use_priorized_exp_replay = use_priorized_exp_replay
-        self.cut_training = cut_training
-        self.end_training = end_training
+  
         self.exploration_terminated = False
         #memory
         
@@ -97,10 +93,8 @@ class Agent:
                                             self.memory_size, 
                                             self.batch_size, 
                                             self.device,
-                                            seed = seed,
-                                            offset=1e-6,
-                                            probabilities = probabilities,
-                                            index = index 
+                                        
+                                            offset=1e-6
                                             )
             self.alpha = alpha 
             self.beta = beta
@@ -112,11 +106,17 @@ class Agent:
                                             self.device,
                                             store_intrisic= use_rnd
                                             )
-        if (loaded_mem is not None):
-            self.replay_memory.memory = loaded_mem
-        
+
         self.adaptive_exploration = adaptive_exploration
         self.use_rnd = use_rnd
+        self.mod_rnd = mod_rnd
+        if self.use_priorized_exp_replay:self.replay_memory.set_alpha(self.alpha)
+        if self.mod_rnd:
+            self.rnd_low_threshold = 0.2
+            self.rnd_high_threshold = 500
+            self.uncertainty_const = 1.01
+            
+            
         if self.adaptive_exploration or self.use_rnd:
             
             self.variance = 0
@@ -137,6 +137,26 @@ class Agent:
                 self.gamma = 0.999
                 self.intr_gamma = 0.99
                 self.w_index = 0
+        return
+
+
+    def evaluate_rnd_netowrk(self, rnd_loss):
+        if not self.mod_rnd: 
+            print('Something wrong with the mod rnd')
+            return
+        if self.rnd_predictor.get_uncertainty() != self.rnd_target.get_uncertainty():
+            print('Something wrong with the synchronization of the rnd')
+            return
+        unc = self.rnd_predictor.get_uncertainty()
+
+        if rnd_loss < self.rnd_low_threshold:
+                unc = (unc * self.uncertainty_const)
+                self.rnd_predictor.set_uncertainty(unc)
+                self.rnd_target.set_uncertainty(unc)
+        elif rnd_loss > self.rnd_high_threshold:
+            unc = (unc/self.uncertainty_const)
+            self.rnd_predictor.set_uncertainty(unc)
+            self.rnd_target.set_uncertainty(unc)
         return
 
 
@@ -244,13 +264,19 @@ class Agent:
                                                                                 network = self.model,
                                                                                 target_network = self.target_model,
                                                                                 optim = self.optimizer)
+                
+                elif self.use_priorized_exp_replay: 
+                        loss, self.model, self.target_model = self.train_per(experiences, 
+                                                                            network = self.model,
+                                                                            target_network = self.target_model,
+                                                                            optim = self.optimizer)
                 else:
                     loss, self.model, self.target_model = self.train_basic(     experiences, 
                                                                                 network = self.model,
                                                                                 target_network = self.target_model,
                                                                                 optim = self.optimizer)    
                 Q_losses.append(loss)
-            if (self.adaptive_exploration or self.use_rnd) and (timestep % 2*self.train_frequency == 0): l =self.train_rnd_network(experiences)
+            if (self.adaptive_exploration or self.use_rnd) and ((timestep % (2*self.train_frequency)) == 0): l =self.train_rnd_network(experiences)
             return np.mean(Q_losses), l
         return 0.0, l
 
@@ -282,9 +308,9 @@ class Agent:
         target_network=self.update_network(network, target_network)
         return float(loss.detach().cpu().numpy()), network, target_network
 
-    def train_per(self,experiences, network, target_network, optim, normal_training = True):
+    def train_per(self,experiences, network, target_network, optim):
         
-        self.replay_memory.set_alpha(self.alpha)
+        
         
         network.train()
         optim.zero_grad()
