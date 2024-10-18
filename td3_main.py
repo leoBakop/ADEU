@@ -248,7 +248,7 @@ if __name__ == '__main__':
     parser.add_argument('--noisy_nets', action='store_true', default=False)
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
-    parser.add_argument('--per', action='store_true', default=True, help='Would you like to Use the prioritized Experience Replay Buffer')
+    parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
    

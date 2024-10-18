@@ -118,7 +118,7 @@ class TD3(object):
         if not self.per:
             self.buffer = ReplayBuffer(buffer_size=int(buffer_size), batch_size=int(batch_size), device = self.device, store_intrisic=use_rnd)
         else:
-             self.replay_memory = Priorized_Experience_Replay(buffer_size=int(buffer_size), batch_size=int(batch_size),device=self.device,offset=1e-6)
+             self.buffer = Priorized_Experience_Replay(buffer_size=int(buffer_size), batch_size=int(batch_size),device=self.device,offset=1e-6)
 
         self.total_it = 0
         #Algorithm used for this run
@@ -242,7 +242,7 @@ class TD3(object):
             self.buffer.add(state, action, reward, next_state, done)
         
         
-        # If enough samples are available in replay_memory, get random subset and learn
+        # If enough samples are available in buffer, get random subset and learn
         if len(self.buffer) > self.min_mem_size and timestep % self.train_frequency == 0:
             experiences = self.buffer.sample()
     
@@ -359,8 +359,8 @@ class TD3(object):
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
-
-        self.replay_memory.update_priorities(idx, abs(td_error.data.cpu().numpy()))
+        prob_error = current_Q1+current_Q2 - 2*target_Q
+        self.buffer.update_priorities(idx, abs(prob_error.data.cpu().numpy()))
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
             # Compute actor loss
