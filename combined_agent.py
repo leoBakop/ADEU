@@ -31,6 +31,7 @@ class Pretrained_Agent(Agent):
                     #for the adaptive expploration
                     adaptive_exploration = True,
                     decay = 1_000_000,
+                    mod_rnd = True,
                     use_rnd = False,
                     use_noisy_nets = False,
                     timesteps = 1000,
@@ -55,6 +56,8 @@ class Pretrained_Agent(Agent):
                     tau=tau,
                     alpha=alpha,
                     beta=beta,
+                    mod_rnd=mod_rnd,
+                    use_priorized_exp_replay= use_priorized_exp_replay,
                     ###
                   
                     #for the adaptive expploration
@@ -100,6 +103,8 @@ class Pretrained_TD3_Agent(TD3):
                 batch_size=256, 
                 min_mem_size=256, 
                 buffer_size=100000, 
+                mod_rnd = False,
+                per = False,
                 adaptive_exploration=True, 
                 decay=1000000, 
                 use_rnd=False, 
@@ -115,6 +120,8 @@ class Pretrained_TD3_Agent(TD3):
                             noise_clip=noise_clip, 
                             policy_freq=policy_freq, 
                             lr=lr, 
+                            mod_rnd=mod_rnd,
+                            per=per,
                             train_frequency=train_frequency, 
                             batch_size=batch_size, 
                             min_mem_size=min_mem_size, 

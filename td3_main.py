@@ -56,6 +56,9 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
         'noisy_nets':noisy_nets,
         'Baseline': (not ade) and (not use_rnd) and (not noisy_nets) and (not comb)
     }
+    arguments = arguments+" per" if per else arguments
+    arguments = arguments + " mod_rnd" if mod_rnd else arguments
+    
     label = [a for a in arguments.keys() if arguments[a] ][0]
     name = f'TD3, using {label}, seed:{seed}'
     wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb))
