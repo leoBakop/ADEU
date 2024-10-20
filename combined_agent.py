@@ -33,7 +33,8 @@ class Pretrained_Agent(Agent):
                  ):
         if (not adaptive_exploration):sys.exit(-1)
         
-        super().__init__(inputs_shape, hidden_layer_1,hidden_layer_2,
+        super().__init__(inputs_shape = inputs_shape
+                         , hidden_layer_1,hidden_layer_2,
                     use_priorized_exp_replay, max_speed,
                     batch_size, min_mem_size, 
                     learning_rate , gamma ,
@@ -48,7 +49,6 @@ class Pretrained_Agent(Agent):
                     tau=tau,
                     alpha=alpha,
                     beta=beta,
-                    mod_rnd=mod_rnd,
                     use_priorized_exp_replay= use_priorized_exp_replay,
                     ###
                   
