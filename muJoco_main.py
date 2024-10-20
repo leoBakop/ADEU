@@ -61,7 +61,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     label = label+" per" if per else label
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
-    debug = True
+    debug = False
     wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb), debug = debug)
     path = f"./experiments/naf/{domain}/{label}/seed_{seed}"
     if not os.path.exists(path+'/stored_data'):
