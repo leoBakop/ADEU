@@ -62,7 +62,8 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
     label = label+" per" if per else label
     label = label + " mod_rnd" if mod_rnd else label
     name = f'TD3, using {label}, seed:{seed}'
-    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb))
+    debug = False
+    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
     
     
     
@@ -195,11 +196,12 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
     wandb.finish()
     return mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_episode, var_per_episode
 
-def wandb_session(domain , seed = 0, name = None, code = 0):
+def wandb_session(domain , seed = 0, name = None, code = 0, debug = False):
     # start a new wandb run to track this script
+    project = "debug" if debug else f"Post AAMAS| TD3, Adaptive Exploration {domain}"
     wandb.init(
         # set the wandb project where this run will be logged
-        project=f"Post AAMAS| TD3, Adaptive Exploration {domain}",
+        project=project,
         name = name,
         # track hyperparameters and run metadata
         config={

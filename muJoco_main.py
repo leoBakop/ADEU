@@ -62,7 +62,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
     debug = False
-    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb), debug = debug)
+    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
     path = f"./experiments/naf/{domain}/{label}/seed_{seed}"
     if not os.path.exists(path+'/stored_data'):
         os.makedirs(path+'/stored_data')
@@ -115,7 +115,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     "use_noisy_nets": noisy_nets
     }
 
-    pretraining = 0.05
+    pretraining = 0.03
     agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
