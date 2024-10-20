@@ -116,13 +116,15 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     "use_noisy_nets": noisy_nets
     }
 
-    agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = 0.03))
+    pretraining = 0.05
+    agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
         run(**kwargs, path = path, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, mod_rnd = mod_rnd)
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
     agent_params['networks_uncertainty'] = UNCERTAINTY
+    agent_params['pretraining_time'] = pretraining
     store(path = path, mean_reward = mean_reward, rewards=rewards, mean_evaluation_rewards=mean_evaluation_rewards, evaluation_rewards=evaluation_rewards,  evaluation_duration=evaluation_duration, cum_evaluation_rewards=cum_evaluation_rewards, arg_var_per_epsiode=arg_var_per_epsiode, var_per_episode=var_per_episode, params = agent_params)    
     env.close()
     return mean_evaluation_rewards
