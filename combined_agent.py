@@ -15,19 +15,12 @@ class Pretrained_Agent(Agent):
                     c = 1.0,action_size = 2,
                     memory_size = 100_000,
                     seed = 0,
-                    cut_training = 150,
-                    end_training = 550,
                     evaluation_c = 10 ** (-5),
                     train_frequency = 1,
                     #variables for the priorzed experience replay
                     tau = .005,
                     alpha = .7,
                     beta = 0.5,
-                    #network variables for storing, and loading an existing network
-                    path = None,
-                    loaded_mem = None,
-                    probabilities = None, 
-                    index = 0,
                     #for the adaptive expploration
                     adaptive_exploration = True,
                     decay = 1_000_000,
@@ -48,8 +41,7 @@ class Pretrained_Agent(Agent):
                     c ,action_size ,
                     memory_size,
                     seed,  
-                    cut_training = cut_training,
-                    end_training = end_training,
+                    use_noisy_nets=use_noisy_nets,
                     evaluation_c = evaluation_c,
                     train_frequency=train_frequency,
                     #variables for the priorzed experience replay
@@ -64,7 +56,7 @@ class Pretrained_Agent(Agent):
                     adaptive_exploration = True,
                     decay = decay,
                     use_rnd = False,
-                    use_noisy_nets = False)
+                    mod_rnd=mod_rnd)
         self.boltzman = True
         self.varience = 0
         self.horizon = horizon
