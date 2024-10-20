@@ -61,7 +61,8 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     label = label+" per" if per else label
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
-    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb))
+    debug = True
+    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb), debug = debug)
     path = f"./experiments/naf/{domain}/{label}/seed_{seed}"
     if not os.path.exists(path+'/stored_data'):
         os.makedirs(path+'/stored_data')
@@ -85,9 +86,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     inside_layer_1 = 256
     inside_layer_2= 256
     batch_size = 64
-    cut_training = -1
     horizon = horizon
-    end_training = horizon 
     print(f"actions are limited between [{-env.action_space.high[0]} and {env.action_space.high[0]}]")
 
     agent_params = {
@@ -201,11 +200,12 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
     wandb.finish()
     return mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_episode, var_per_episode
 
-def wandb_session(domain , seed = 0, name = None, code = 0):
+def wandb_session(domain , seed = 0, name = None, code = 0, debug = False):
     # start a new wandb run to track this script
+    project = "debug" if debug else f"Post AAMAS| NAF, Adaptive Exploration {domain}"
     wandb.init(
         # set the wandb project where this run will be logged
-        project=f"Post AAMAS| NAF, Adaptive Exploration {domain}",
+        project=project,
         name = name,
         # track hyperparameters and run metadata
         config={

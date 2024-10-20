@@ -33,30 +33,35 @@ class Pretrained_Agent(Agent):
                  ):
         if (not adaptive_exploration):sys.exit(-1)
         
-        super().__init__(inputs_shape = inputs_shape
-                         , hidden_layer_1,hidden_layer_2,
-                    use_priorized_exp_replay, max_speed,
-                    batch_size, min_mem_size, 
-                    learning_rate , gamma ,
-                    update_target_every , clip_grad ,
-                    c ,action_size ,
-                    memory_size,
-                    seed,  
-                    use_noisy_nets=use_noisy_nets,
-                    evaluation_c = evaluation_c,
-                    train_frequency=train_frequency,
-                    #variables for the priorzed experience replay
-                    tau=tau,
-                    alpha=alpha,
-                    beta=beta,
-                    use_priorized_exp_replay= use_priorized_exp_replay,
-                    ###
-                  
-                    #for the adaptive expploration
-                    adaptive_exploration = True,
-                    decay = decay,
-                    use_rnd = False,
-                    mod_rnd=mod_rnd)
+        super().__init__(   inputs_shape = inputs_shape,
+                            hidden_layer_1= hidden_layer_1,
+                            hidden_layer_2=hidden_layer_2,
+                            max_speed=max_speed,
+                            use_priorized_exp_replay=use_priorized_exp_replay,
+                            batch_size = batch_size, 
+                            min_mem_size = min_mem_size, 
+                            learning_rate = learning_rate, 
+                            gamma = gamma,
+                            update_target_every = update_target_every ,
+                            clip_grad = clip_grad ,
+                            c = c ,
+                            action_size = action_size ,
+                            memory_size = memory_size,
+                            seed = seed ,  
+                            use_noisy_nets=use_noisy_nets,
+                            evaluation_c = evaluation_c,
+                            train_frequency=train_frequency,
+                            #variables for the priorzed experience replay
+                            tau=tau,
+                            alpha=alpha,
+                            beta=beta,
+                            ###
+                        
+                            #for the adaptive expploration
+                            adaptive_exploration = True,
+                            decay = decay,
+                            use_rnd = False,
+                            mod_rnd=mod_rnd)
         self.boltzman = True
         self.varience = 0
         self.horizon = horizon
