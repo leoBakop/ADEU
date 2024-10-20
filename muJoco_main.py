@@ -61,7 +61,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     label = label+" per" if per else label
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
-    debug = False
+    debug = True
     wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
     path = f"./experiments/naf/{domain}/{label}/seed_{seed}"
     if not os.path.exists(path+'/stored_data'):
@@ -247,7 +247,7 @@ def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False
     if adaptive_exploration: return retval + 1
     if use_rnd: return retval + 2
     if mod_rnd: sys.exit(-1)
-    return 0 
+    return retval
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
@@ -257,7 +257,7 @@ if __name__ == '__main__':
     parser.add_argument('--noisy_nets', action='store_true', default=False)
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
-    parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
+    parser.add_argument('--per', action='store_true', default=True, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
    

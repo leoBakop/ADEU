@@ -245,7 +245,7 @@ def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False
     if adaptive_exploration: return retval + 1
     if use_rnd: return retval + 2
     if mod_rnd: sys.exit(-1)
-    return 0 
+    return retval 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
