@@ -56,9 +56,10 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
         'noisy_nets':noisy_nets,
         'Boltz': (not ade) and (not use_rnd) and (not noisy_nets) and (not comb)
     }
-    arguments = arguments+" per" if per else arguments
-    arguments = arguments + " mod_rnd" if mod_rnd else arguments
+    
     label = [a for a in arguments.keys() if arguments[a] ][0]
+    label = label+" per" if per else label
+    label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
     wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb))
     path = f"./experiments/naf/{domain}/{label}/seed_{seed}"
