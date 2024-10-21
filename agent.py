@@ -120,6 +120,7 @@ class Agent:
         if self.adaptive_exploration or self.use_rnd:
             
             self.variance = 0
+            self.exploration_rate = 0
             self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             torch.manual_seed(10 * (seed+1))
             self.rnd_predictor = network.RND_NetworkPred(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
@@ -140,7 +141,7 @@ class Agent:
         return
 
 
-    def evaluate_rnd_netowrk(self, rnd_loss):
+    def evaluate_rnd_netowrk(self, mean_var, max_var):
         if not self.mod_rnd: 
             print('Something wrong with the mod rnd')
             return
@@ -149,11 +150,11 @@ class Agent:
             return
         unc = self.rnd_predictor.get_uncertainty()
 
-        if rnd_loss < self.rnd_low_threshold:
+        if max_var < self.rnd_low_threshold:
                 unc = (unc * self.uncertainty_const)
                 self.rnd_predictor.set_uncertainty(unc)
                 self.rnd_target.set_uncertainty(unc)
-        elif rnd_loss > self.rnd_high_threshold:
+        elif mean_var > self.rnd_high_threshold:
             unc = (unc/self.uncertainty_const)
             self.rnd_predictor.set_uncertainty(unc)
             self.rnd_target.set_uncertainty(unc)
@@ -178,7 +179,7 @@ class Agent:
             v = self.model.get_noise_cov()
             v = v.detach().cpu().numpy().reshape(v.shape[-1], v.shape[-1])
             v = np.array([v[i,i]for i in range(v.shape[0])])
-            self.variance = np.mean(v)
+            self.exploration_rate = np.mean(v)
             return self.get_prediction(state)[0]
 
         
@@ -188,7 +189,7 @@ class Agent:
         #s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
         variance = self.calculate_intrisic_reward(s) #it was just state
         #variance = .1 in case of constant variance
-        self.variance = variance #self.variance servs as a buffer
+        self.exploration_rate = variance #self.exploration_rate servs as a buffer
         action = self.get_prediction(state)[3].detach().cpu()
         if np.random.rand()< self.eps: 
             expl_action = MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample()
@@ -210,6 +211,7 @@ class Agent:
             variance = np.absolute(self.rnd_predictor(state).detach().cpu() - self.rnd_target(state).detach().cpu())
         self.rnd_predictor.train()
         self.rnd_target.train()
+        self.variance = variance
         variance = np.clip(variance, a_min = - 2*self.max_speed, a_max = 2*self.max_speed) #just to avoid the infinite variance
         if torch.isnan(variance).any():
             print('debug')
@@ -217,7 +219,7 @@ class Agent:
         return variance**2
     
     def get_variance(self):
-        return self.variance
+        return self.exploration_rate, self.variance
 
     def get_clear_action(self,state):
         return self.get_prediction(state)[3]
@@ -243,12 +245,12 @@ class Agent:
 
             intrisic_reward = self.calculate_intrisic_reward(s)
             #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
-            self.variance = intrisic_reward**2 #self.variance servs as a buffer
-            self.intr_rewards.update(self.variance)
-            self.variance /= self.intr_rewards.mean
+            self.exploration_rate = intrisic_reward**2 #self.exploration_rate servs as a buffer
+            self.intr_rewards.update(self.exploration_rate)
+            self.exploration_rate /= self.intr_rewards.mean
             self.w_index+=1
             #if self.w_index > 10: intrisic_reward/=self.welford.var_s[1]
-            self.replay_memory.add(state, action, reward, next_state, done, self.variance)
+            self.replay_memory.add(state, action, reward, next_state, done, self.exploration_rate)
         else:
             self.replay_memory.add(state, action, reward, next_state, done)
         
