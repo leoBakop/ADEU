@@ -113,7 +113,7 @@ class Agent:
         if self.use_priorized_exp_replay:self.replay_memory.set_alpha(self.alpha)
         if self.mod_rnd:
             self.rnd_low_threshold = 0.2
-            self.rnd_high_threshold = 100
+            self.rnd_high_threshold = 45
             self.uncertainty_const = 1.01
             
             
