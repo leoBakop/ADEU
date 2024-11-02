@@ -58,7 +58,7 @@ class Pretrained_Agent(Agent):
                             ###
                         
                             #for the adaptive expploration
-                            adaptive_exploration = True,
+                            adaptive_exploration = False,
                             decay = decay,
                             use_rnd = False,
                             mod_rnd=mod_rnd)
@@ -114,12 +114,12 @@ class Pretrained_Agent(Agent):
         return super().get_action(state)
 
     def step(self, state, action, reward, next_state, done, episode, timestep):
-        if not self.boltzman:
+        if self.boltzman:
             retval = super().step(state, action, reward, next_state, done, episode, timestep)
-            if not self.use_noisy_nets: self.adeu_agent.step(state, action, reward, next_state, done, episode, timestep)
+            if self.use_noisy_nets: self.adeu_agent.step(state, action, reward, next_state, done, episode, timestep)
         else:
             retval = self.adeu_agent.step(state, action, reward, next_state, done, episode, timestep)
-            return retval
+        return retval
 class Pretrained_TD3_Agent(TD3):
     def __init__(self, 
                 state_dim, 
