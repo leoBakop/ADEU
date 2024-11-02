@@ -118,7 +118,8 @@ class Pretrained_Agent(Agent):
             retval = super().step(state, action, reward, next_state, done, episode, timestep)
             if self.use_noisy_nets: self.adeu_agent.step(state, action, reward, next_state, done, episode, timestep)
         else:
-            retval = self.adeu_agent.step(state, action, reward, next_state, done, episode, timestep)
+            if self.use_noisy_nets: retval = self.adeu_agent.step(state, action, reward, next_state, done, episode, timestep) 
+            else: retval = super().step(state, action, reward, next_state, done, episode, timestep)
         return retval
 class Pretrained_TD3_Agent(TD3):
     def __init__(self, 
