@@ -62,6 +62,38 @@ class Pretrained_Agent(Agent):
                             decay = decay,
                             use_rnd = False,
                             mod_rnd=mod_rnd)
+        
+        if self.use_noisy_nets:
+            
+            self.adeu_agent = Agent(inputs_shape = inputs_shape,
+                                hidden_layer_1= hidden_layer_1,
+                                hidden_layer_2=hidden_layer_2,
+                                max_speed=max_speed,
+                                use_priorized_exp_replay=use_priorized_exp_replay,
+                                batch_size = batch_size, 
+                                min_mem_size = min_mem_size, 
+                                learning_rate = learning_rate, 
+                                gamma = gamma,
+                                update_target_every = update_target_every ,
+                                clip_grad = clip_grad ,
+                                c = c ,
+                                action_size = action_size ,
+                                memory_size = memory_size,
+                                seed = seed ,  
+                                use_noisy_nets=False,
+                                evaluation_c = evaluation_c,
+                                train_frequency=train_frequency,
+                                #variables for the priorzed experience replay
+                                tau=tau,
+                                alpha=alpha,
+                                beta=beta,
+                                ###
+                            
+                                #for the adaptive expploration
+                                adaptive_exploration = True,
+                                decay = decay,
+                                use_rnd = False,
+                                mod_rnd=mod_rnd)
         self.boltzman = True
         self.varience = 0
         self.horizon = horizon
@@ -71,16 +103,23 @@ class Pretrained_Agent(Agent):
 
 
     def get_action(self, state):
+        #if we still use the 'boltzamn' action
         if self.index < int(self.pretraining*self.horizon*self.timesteps):
             self.index += 1
             return self.get_prediction(state)[0] #Boltzman action. 
         if(self.boltzman):
             print('Ade was just utilized')
             self.boltzman = False
+        if self.use_noisy_nets: return self.adeu_agent.get_action(state)
         return super().get_action(state)
 
-
-
+    def step(self, state, action, reward, next_state, done, episode, timestep):
+        if not self.boltzman:
+            retval = super().step(state, action, reward, next_state, done, episode, timestep)
+            if not self.use_noisy_nets: self.adeu_agent.step(state, action, reward, next_state, done, episode, timestep)
+        else:
+            retval = self.adeu_agent.step(state, action, reward, next_state, done, episode, timestep)
+            return retval
 class Pretrained_TD3_Agent(TD3):
     def __init__(self, 
                 state_dim, 

@@ -40,9 +40,7 @@ class Agent:
                     use_rnd = False,
                     use_noisy_nets = False
                  ):
-        if use_noisy_nets:
-            adaptive_exploration = False
-            use_rnd = False
+        
         #networks
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
@@ -56,11 +54,11 @@ class Agent:
             return
         
         self.model = network.NAF(state_size = inputs_shape, action_size=action_size, layer_size_1 = hidden_layer_1,
-                                    layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, device = self.device).to(self.device)
+                                    layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, device = self.device, noisy_nets=use_noisy_nets).to(self.device)
         
         #this predicts in every step and change its weights periodically
         self.target_model = network.NAF(state_size = inputs_shape, action_size=action_size, layer_size_1 = hidden_layer_1,
-                                    layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, device = self.device).to(self.device)
+                                    layer_size_2= hidden_layer_2, c=c,  max_speed = max_speed, device = self.device, noisy_nets=use_noisy_nets).to(self.device)
         
 
 
@@ -110,6 +108,7 @@ class Agent:
         self.adaptive_exploration = adaptive_exploration
         self.use_rnd = use_rnd
         self.mod_rnd = mod_rnd
+        self.use_noisy_nets = use_noisy_nets
         if self.use_priorized_exp_replay:self.replay_memory.set_alpha(self.alpha)
         if self.mod_rnd:
             self.rnd_low_threshold = 0.2
