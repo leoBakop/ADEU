@@ -116,11 +116,11 @@ class Agent:
             self.rnd_high_threshold = 45
             self.uncertainty_const = 1.01
             
-            
+        self.exploration_rate = 0    
         if self.adaptive_exploration or self.use_rnd:
             
             self.variance = 0
-            self.exploration_rate = 0
+            
             self.rnd_target = network.RND_Network(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
             torch.manual_seed(10 * (seed+1))
             self.rnd_predictor = network.RND_NetworkPred(device=self.device, input_size=inputs_shape, hidden_size=hidden_layer_1, max_speed=max_speed).to(self.device)
@@ -219,6 +219,8 @@ class Agent:
         return variance**2
     
     def get_variance(self):
+        if not self.adaptive_exploration: 
+            return self.exploration_rate, 0
         return self.exploration_rate, self.variance
 
     def get_clear_action(self,state):
