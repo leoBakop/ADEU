@@ -63,8 +63,8 @@ class Pretrained_Agent(Agent):
                             use_rnd = False,
                             mod_rnd=mod_rnd)
         
-        if self.use_noisy_nets:
-            
+        if use_noisy_nets:
+            self.use_noisy_nets = True
             self.noisy_agent = Agent(inputs_shape = inputs_shape,
                                 hidden_layer_1= hidden_layer_1,
                                 hidden_layer_2=hidden_layer_2,
@@ -108,11 +108,10 @@ class Pretrained_Agent(Agent):
             self.index += 1
             if self.use_noisy_nets:
                 return self.noisy_agent.get_prediction(state)[0] #Boltzman action. 
-            self.get_prediction(state)[0]
+            return super().get_prediction(state)[0]
         if(self.boltzman):
             print('Ade was just utilized')
             self.boltzman = False
-        
         return super().get_action(state)
 
     def step(self, state, action, reward, next_state, done, episode, timestep):
