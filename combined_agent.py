@@ -93,7 +93,7 @@ class Pretrained_Agent(Agent):
                                 adaptive_exploration = False,
                                 decay = decay,
                                 use_rnd = False,
-                                mod_rnd=mod_rnd)
+                                mod_rnd=False)
         self.boltzman = True
         self.varience = 0
         self.horizon = horizon
