@@ -113,7 +113,7 @@ class Agent:
         if self.mod_rnd:
             self.rnd_low_threshold = 0.2
             self.rnd_high_threshold = 45
-            self.uncertainty_const = 1.01
+            self.uncertainty_const = 1.5
             
         self.exploration_rate = 0    
         if self.adaptive_exploration or self.use_rnd:
@@ -175,11 +175,12 @@ class Agent:
         """
         if self.use_rnd: return self.get_prediction(state)[0] #if the efficiency of the rnd changes, it is because of that
         if not self.adaptive_exploration:
+            action = self.get_prediction(state)[0]
             v = self.model.get_noise_cov()
             v = v.detach().cpu().numpy().reshape(v.shape[-1], v.shape[-1])
             v = np.array([v[i,i]for i in range(v.shape[0])])
             self.exploration_rate = np.mean(v)
-            return self.get_prediction(state)[0]
+            return action
 
         
         s = (state - self.obss.mean )/ self.obss.var**2
@@ -219,7 +220,7 @@ class Agent:
     
     def get_variance(self):
         if not self.adaptive_exploration: 
-            return self.exploration_rate, 0
+            return self.exploration_rate, self.exploration_rate
         return self.exploration_rate, self.variance
 
     def get_clear_action(self,state):

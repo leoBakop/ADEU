@@ -107,12 +107,25 @@ class Pretrained_Agent(Agent):
         if self.index < int(self.pretraining*self.horizon*self.timesteps):
             self.index += 1
             if self.use_noisy_nets:
-                return self.noisy_agent.get_prediction(state)[0] #Boltzman action. 
+                return self.noisy_agent.get_action(state) #Boltzman action. 
             return super().get_prediction(state)[0]
         if(self.boltzman):
             print('Ade was just utilized')
             self.boltzman = False
         return super().get_action(state)
+
+    def get_variance(self):
+        if (self.boltzman):
+            if self.use_noisy_nets:
+                return  self.noisy_agent.get_variance()
+            
+            v = self.model.get_noise_cov()
+            v = v.detach().cpu().numpy().reshape(v.shape[-1], v.shape[-1])
+            v = np.array([v[i,i]for i in range(v.shape[0])])
+            v = np.mean(v)
+            return v,v
+
+        return  super().get_variance()
 
     def step(self, state, action, reward, next_state, done, episode, timestep):
         if self.boltzman:

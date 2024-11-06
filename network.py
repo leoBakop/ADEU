@@ -103,7 +103,7 @@ class NAF(nn.Module):
         self.matrix_entries = nn.Linear(layer_size_2, int(self.action_size*(self.action_size+1)/2))
         self.c =c
         self.max_speed = max_speed
-
+        self.noise_cov = torch.zeros((self.action_size, self.action_size)).to(self.device)
 
     
     def forward(self, input_, action=None):
