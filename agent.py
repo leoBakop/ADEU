@@ -247,7 +247,8 @@ class Agent:
 
             intrisic_reward = self.calculate_intrisic_reward(s)
             #self.welford.add(np.array([self.w_index, intrisic_reward.numpy()[0]]))
-            self.exploration_rate = intrisic_reward**2 #self.exploration_rate servs as a buffer
+
+            self.exploration_rate = (intrisic_reward**2).detach().cpu().numpy() #self.exploration_rate servs as a buffer
             self.intr_rewards.update(self.exploration_rate)
             self.exploration_rate /= self.intr_rewards.mean
             self.w_index+=1
