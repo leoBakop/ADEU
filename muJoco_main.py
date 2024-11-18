@@ -107,7 +107,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     "alpha": 0.7,  # for PER
     "beta": 0.5,   # for PER
     "evaluation_c": 0,
-    "train_frequency": 2,  # 16 for everything except mount car which is 1
+    "train_frequency": 2,  # 2 for everything
     "adaptive_exploration": adaptive_exploration,
     "mod_rnd":mod_rnd,
     "decay": int(0.05 * horizon * timesteps),
@@ -115,7 +115,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     "use_noisy_nets": noisy_nets
     }
 
-    pretraining = 0.1
+    pretraining = 0.03
     agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
@@ -277,7 +277,7 @@ if __name__ == '__main__':
     comb = args.comb
     mod_rnd = args.mod_rnd
     per = args.per
-    horizon = int(15_000_000 / timesteps) #everythin is 50M except mountain car which is 10
+    horizon = int(50_000_000 / timesteps) #everythin is 50M
     if timesteps <= 200:
         horizon = int(horizon/10)
 
