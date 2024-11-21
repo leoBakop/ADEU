@@ -23,9 +23,10 @@ class Pretrained_Agent(Agent):
                     beta = 0.5,
                     #for the adaptive expploration
                     adaptive_exploration = True,
-                    decay = 1_000_000,
+                    
                     mod_rnd = True,
                     use_rnd = False,
+                    eps = 0.01,
                     use_noisy_nets = False,
                     timesteps = 1000,
                     horizon = 1000,
@@ -56,10 +57,10 @@ class Pretrained_Agent(Agent):
                             alpha=alpha,
                             beta=beta,
                             ###
-                        
+
                             #for the adaptive expploration
                             adaptive_exploration = True,
-                            decay = decay,
+                            eps = eps,
                             use_rnd = False,
                             mod_rnd=mod_rnd)
         
@@ -91,7 +92,6 @@ class Pretrained_Agent(Agent):
                             
                                 #for the adaptive expploration
                                 adaptive_exploration = False,
-                                decay = decay,
                                 use_rnd = False,
                                 mod_rnd=False)
         self.boltzman = True
@@ -158,7 +158,7 @@ class Pretrained_TD3_Agent(TD3):
                 mod_rnd = False,
                 per = False,
                 adaptive_exploration=True, 
-                decay=1000000, 
+                eps = 0.01,
                 use_rnd=False, 
                 use_noisy_nets=False):
         if (not adaptive_exploration):sys.exit(-1)
@@ -179,7 +179,7 @@ class Pretrained_TD3_Agent(TD3):
                             min_mem_size=min_mem_size, 
                             buffer_size=buffer_size, 
                             adaptive_exploration=adaptive_exploration, 
-                            decay=decay, 
+                            eps=eps, 
                             use_rnd=use_rnd, 
                             use_noisy_nets=use_noisy_nets)
         self.baseline_exploration = True

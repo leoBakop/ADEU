@@ -152,7 +152,7 @@ def run(env: SumoEnv,  agent: Agent, first_obs, horizon, episode_size,path = Non
     #for the eps-greedy algorithm/ general exploration
     goal = goal + 0.01
     
-    if per : b = beta_0
+    if per:b = beta_0
     
     if not first_time:
         if not type(s_string) is list:

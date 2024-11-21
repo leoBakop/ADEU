@@ -36,7 +36,7 @@ class Agent:
                     #for the adaptive expploration
                     adaptive_exploration = True,
                     mod_rnd = False,
-                    decay = 1_000_000,
+                    eps  = 0.01,
                     use_rnd = False,
                     use_noisy_nets = False
                  ):
@@ -127,10 +127,8 @@ class Agent:
 
             self.rnd_optimizer = SGD(self.rnd_predictor.parameters(), lr=learning_rate)
             self.rnd_loss = MSELoss()
-            self.decay = decay
-            self.epsilon = np.linspace(.07, .001, decay) 
-            self.eps_index = 0
-            self.eps = .07
+            self.eps = eps
+            self.rollout_episode = False
             self.obss = RunningMeanStd(shape= (1, inputs_shape)) #it was inside the following if
             if self.use_rnd:
                 self.intr_rewards = RunningMeanStd()
@@ -174,7 +172,7 @@ class Agent:
         (the action that should be used/train the network with)
         """
         if self.use_rnd: return self.get_prediction(state)[0] #if the efficiency of the rnd changes, it is because of that
-        if not self.adaptive_exploration:
+        if not self.adaptive_exploration or (self.adaptive_exploration and self.rollout_episode):
             action = self.get_prediction(state)[0]
             v = self.model.get_noise_cov()
             v = v.detach().cpu().numpy().reshape(v.shape[-1], v.shape[-1])
@@ -183,7 +181,7 @@ class Agent:
             return action
 
         
-        s = (state - self.obss.mean )/ self.obss.var**2
+        s = (state - torch.from_numpy(self.obss.mean) )/ torch.from_numpy(self.obss.var**2)
         s = s[0].float()
         s = torch.clamp(s, min = -5, max = 5)
         #s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
@@ -191,10 +189,10 @@ class Agent:
         #variance = .1 in case of constant variance
         self.exploration_rate = variance #self.exploration_rate servs as a buffer
         action = self.get_prediction(state)[3].detach().cpu()
-        if np.random.rand()< self.eps: 
+        """ if np.random.rand()< self.eps: 
             expl_action = MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample()
             expl_action = torch.clamp(expl_action, min = - self.max_speed, max = self.max_speed)
-            return expl_action
+            return expl_action """
         if variance == 0: return action
         
         dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
@@ -208,11 +206,11 @@ class Agent:
         self.rnd_predictor.eval()
         self.rnd_target.eval()
         with torch.no_grad():
-            variance = np.absolute(self.rnd_predictor(state).detach().cpu() - self.rnd_target(state).detach().cpu())
+            variance = torch.abs(self.rnd_predictor(state).detach().cpu() - self.rnd_target(state).detach().cpu())
         self.rnd_predictor.train()
         self.rnd_target.train()
         self.variance = variance
-        variance = np.clip(variance, a_min = - 2*self.max_speed, a_max = 2*self.max_speed) #just to avoid the infinite variance
+        variance = torch.clamp(variance, min = - 2*self.max_speed, max = 2*self.max_speed) #just to avoid the infinite variance
         if torch.isnan(variance).any():
             print('debug')
             variance = self.max_speed
@@ -231,16 +229,14 @@ class Agent:
         l = 0
         if self.adaptive_exploration or self.use_rnd: self.obss.update(state.numpy())
         
-        if self.adaptive_exploration:
-            self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
-            self.eps_index+=1
+
         if self.use_rnd:
             #in case of the rnd, instead of the running average and runing std we are going to use
             #the 'sample average' and 'sample std' to increase the computational efficiency
             #instead of witing code we are going to use the welford algorithm via its package
             self.obss.update(state.numpy())
             s = next_state
-            s = (s - self.obss.mean )/ self.obss.var**2
+            s = (s - torch.from_numpy(self.obss.mean) )/ torch.from_numpy(self.obss.var**2)
             s = s[0].float()
             s = torch.clamp(s, min = -5, max = 5)
             #s = self.scale(s) #scale between -1 1 if the values are too low
@@ -382,7 +378,7 @@ class Agent:
         # Extract states from experiences
         states, *_ = experiences
         if self.use_rnd or self.adaptive_exploration: #it was only if self.use_rnd
-            states = ((states.cpu() - self.obss.mean) / self.obss.var**2)[0].float()
+            states = ((states.cpu() - torch.from_numpy(self.obss.mean[0])) / torch.from_numpy(self.obss.var[0]**2))[0].float()
             states= torch.clamp(states, -5, 5)
             #new code, if the state containts low values, I scale it between -1 1
             

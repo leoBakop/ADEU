@@ -110,7 +110,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     "train_frequency": 2,  # 2 for everything
     "adaptive_exploration": adaptive_exploration,
     "mod_rnd":mod_rnd,
-    "decay": int(0.05 * horizon * timesteps),
+    "eps":0.01,
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
@@ -145,6 +145,7 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
     tmp_network_loss = 0
     network_loss = 0
     mean_var_per_episode = 0 
+    agent.rollout_episode = False
 
     
 
@@ -171,6 +172,11 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
             current_observation = np.concatenate([arr for arr in current_observation.values()])
         current_observation = torch.FloatTensor(current_observation)
         total_reward = 0
+        if agent.rollout_episode: 
+            agent.rollout_episode = False
+        #check for rollout episode
+        if adaptive_exploration and np.random.rand() < agent.eps: 
+            agent.rollout_episode = True
         
         for t in range(timesteps):
         
@@ -178,6 +184,7 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
             var[t], value_of_rnd[t] = agent.get_variance()
             action=np.array(action.cpu().squeeze().numpy().reshape((agent.action_size,)))
             observation, reward, done, truncated, info = env.step(action)
+                
             if isinstance(observation, dict):
                 observation = np.concatenate([arr for arr in observation.values()])
             tmp_network_loss, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done, episode, timestep=t) #push that in memory
@@ -196,6 +203,7 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
                 summed_reward+=total_reward
                 break
         if (episode % int(.05 * horizon)) == 0: np.save(path+f'/stored_data/variance_of_{episode}th_episode.npy', var)
+        agent.rollout_episode = False
         arg_var_per_episode[episode] = np.argmax(var)
         var_per_episode[episode] = np.max(var)
         mean_var_per_episode+=np.mean(value_of_rnd[:t+1])
@@ -262,7 +270,7 @@ if __name__ == '__main__':
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
-    parser.add_argument('--dom', type=str, default='HalfCheetah-v5', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
    
     args = parser.parse_args()
