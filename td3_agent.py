@@ -87,7 +87,7 @@ class TD3(object):
         per = False,
         mod_rnd = False,
         adaptive_exploration = True,
-        decay = 1e+6,
+        eps = 0.01,
         use_rnd = False,
         use_noisy_nets = False
     ):
@@ -130,8 +130,12 @@ class TD3(object):
         self.mod_rnd = mod_rnd
         if self.mod_rnd:
             self.rnd_low_threshold = 0.2
-            self.rnd_high_threshold = 500
-            self.uncertainty_const = 1.01
+            self.rnd_high_threshold = (5/3) * state_dim
+            self.rnd_high_threshold = min (40, self.rnd_high_threshold)
+            self.rnd_high_threshold = max (5, self.rnd_high_threshold)
+            #self.rnd_high_threshold should be in the range of [5,40]
+            print(f'the rnd mean threshold is {self.rnd_high_threshold}')
+            self.uncertainty_const = 1.5
         
         
         ####################################################
@@ -145,10 +149,8 @@ class TD3(object):
             
             self.rnd_optimizer = torch.optim.SGD(self.rnd_predictor.parameters(), lr=lr)
             self.rnd_loss = nn.MSELoss()
-            self.decay = decay
-            self.epsilon = np.linspace(.07, .001, decay) 
-            self.eps_index = 0
-            self.eps = .07
+            self.eps = eps
+            self.rollout_episode = False
             self.obss = RunningMeanStd(shape= (1, state_dim)) #it was inside the following if
             if self.use_rnd:
 
@@ -190,9 +192,10 @@ class TD3(object):
 			).clip(-self.max_action, self.max_action) """
         clear_action = self.get_clear_action(np.array(state))
         if self.use_rnd: return clear_action
-        if not self.adaptive_exploration: return (clear_action + np.random.normal(0, self.max_action * self.policy_noise, size=self.action_dim)).clip(-self.max_action, self.max_action)
+        if not self.adaptive_exploration or (self.adaptive_exploration and self.rollout_episode): 
+            return (clear_action + np.random.normal(0, self.max_action * self.policy_noise, size=self.action_dim)).clip(-self.max_action, self.max_action)
 
-        s = (state - self.obss.mean )/ self.obss.var**2
+        s = (state - torch.from_numpy(self.obss.mean) )/ torch.from_numpy(self.obss.var**2)
         s = s[0].float()
         s = torch.clamp(s, min = -5, max = 5)
         #s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
@@ -214,9 +217,7 @@ class TD3(object):
         loss = 0
         if self.adaptive_exploration or self.use_rnd: self.obss.update(state.numpy())
         
-        if self.adaptive_exploration:
-            self.eps = self.epsilon[self.eps_index] if self.epsilon.shape[0] > self.eps_index else self.epsilon[-1]
-            self.eps_index+=1
+
         if self.use_rnd:
             #in case of the rnd, instead of the running average and runing std we are going to use
             #the 'sample average' and 'sample std' to increase the computational efficiency
@@ -224,7 +225,7 @@ class TD3(object):
             self.obss.update(state.numpy())
             #s = state #that was the correct now I am testing following line
             s = next_state
-            s = (s - self.obss.mean )/ self.obss.var**2
+            s = (state - torch.from_numpy(self.obss.mean) )/ torch.from_numpy(self.obss.var**2)
             s = s[0].float()
             s = torch.clamp(s, min = -5, max = 5)
             

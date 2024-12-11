@@ -161,6 +161,7 @@ class Pretrained_TD3_Agent(TD3):
                 eps = 0.01,
                 use_rnd=False, 
                 use_noisy_nets=False):
+        
         if (not adaptive_exploration):sys.exit(-1)
         super().__init__(   state_dim=state_dim, 
                             action_dim=action_dim, 
@@ -181,7 +182,30 @@ class Pretrained_TD3_Agent(TD3):
                             adaptive_exploration=adaptive_exploration, 
                             eps=eps, 
                             use_rnd=use_rnd, 
-                            use_noisy_nets=use_noisy_nets)
+                            use_noisy_nets=False)
+        
+        if use_noisy_nets:
+            self.use_noisy_nets = True
+            self.noisy_agent = TD3(state_dim=state_dim, 
+                            action_dim=action_dim, 
+                            max_action=max_action, 
+                            seed=seed, 
+                            discount=discount, 
+                            tau=tau, 
+                            policy_noise=policy_noise, 
+                            noise_clip=noise_clip, 
+                            policy_freq=policy_freq, 
+                            lr=lr, 
+                            mod_rnd=mod_rnd,
+                            per=per,
+                            train_frequency=train_frequency, 
+                            batch_size=batch_size, 
+                            min_mem_size=min_mem_size, 
+                            buffer_size=buffer_size, 
+                            eps=eps, 
+                            use_rnd=False, 
+                            use_noisy_nets=False,
+                            adaptive_exploration = False,)
         self.baseline_exploration = True
         self.varience = 0
         self.horizon = horizon
@@ -198,3 +222,24 @@ class Pretrained_TD3_Agent(TD3):
             print('Ade was just utilized')
             self.baseline_exploration = False
         return super().get_action(state)
+    
+    def get_variance(self):
+        if (self.baseline_exploration):
+            if self.use_noisy_nets:
+                return  self.noisy_agent.get_variance()
+            
+            v = self.model.get_noise_cov()
+            v = v.detach().cpu().numpy().reshape(v.shape[-1], v.shape[-1])
+            v = np.array([v[i,i]for i in range(v.shape[0])])
+            v = np.mean(v)
+            return v,v
+
+        return  super().get_variance()
+
+    def step(self, state, action, reward, next_state, done, timestep):
+        if self.baseline_exploration:
+            retval = super().step(state, action, reward, next_state, done, timestep)
+            if self.use_noisy_nets: retval = self.noisy_agent.step(state, action, reward, next_state, done, timestep)
+        else:
+            retval = super().step(state, action, reward, next_state, done, timestep)
+        return retval

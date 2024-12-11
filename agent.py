@@ -112,9 +112,16 @@ class Agent:
         if self.use_priorized_exp_replay:self.replay_memory.set_alpha(self.alpha)
         if self.mod_rnd:
             self.rnd_low_threshold = 0.2
-            self.rnd_high_threshold = 45
+            self.rnd_high_threshold = 40
+            #self.rnd_high_threshold should be in the range of [5,40]
+            print(f'the rnd mean threshold is {self.rnd_high_threshold}')
             self.uncertainty_const = 1.5
-            
+            self.iter_mod_rnd = 0
+            self.max_rnd_history = 10
+            self.buff_rnds = np.zeros(self.max_rnd_history)
+            self.full = False
+            self.buff_mean_rnds = np.zeros(self.max_rnd_history*100000) #it is just a huge nymebr i don't care that much
+            self.index_buff_mean_rnds = 0
         self.exploration_rate = 0    
         if self.adaptive_exploration or self.use_rnd:
             
@@ -131,6 +138,8 @@ class Agent:
             self.rollout_episode = False
             self.obss = RunningMeanStd(shape= (1, inputs_shape)) #it was inside the following if
             if self.use_rnd:
+                self.rnd_predictor.set_uncertainty(1)
+                self.rnd_target.set_uncertainty(1)
                 self.intr_rewards = RunningMeanStd()
                 self.gamma = 0.999
                 self.intr_gamma = 0.99
@@ -138,23 +147,52 @@ class Agent:
         return
 
 
-    def evaluate_rnd_netowrk(self, mean_var, max_var):
+    def evaluate_rnd_netowrk(self, mean_var, max_var, ):
         if not self.mod_rnd: 
             print('Something wrong with the mod rnd')
             return
         if self.rnd_predictor.get_uncertainty() != self.rnd_target.get_uncertainty():
             print('Something wrong with the synchronization of the rnd')
             return
+        self.buff_rnds[self.iter_mod_rnd] = max_var
+        self.iter_mod_rnd+=1
+        self.iter_mod_rnd%=self.max_rnd_history
+
+        if not self.full and (self.iter_mod_rnd + 1 == self.max_rnd_history): 
+            self.full = True
+        
+        self.buff_mean_rnds[self.index_buff_mean_rnds]=mean_var #it is just a huge nymebr i don't care that much
+        self.index_buff_mean_rnds+=1 
+        
+        if not self.full: return
         unc = self.rnd_predictor.get_uncertainty()
 
-        if max_var < self.rnd_low_threshold:
-                unc = (unc * self.uncertainty_const)
+        
+        mean_max_var = np.mean(self.buff_rnds)
+        #it was max_var < self.rnd_low_threshold:
+        if mean_max_var < self.rnd_low_threshold:
+             unc = (unc * self.uncertainty_const)
+             self.rnd_predictor.set_uncertainty(unc)
+             self.rnd_target.set_uncertainty(unc)
+             return
+
+        
+
+
+        #I should fucking find a way to trak how mach the mean var changes during the episode.
+        #if it remains the same then I should decrease rge threshold.
+        #in all the experiments the rng_high_threshold was set to 40 and in invertedpendulum to 10. 
+        if self.index_buff_mean_rnds > 100:
+            last = self.buff_mean_rnds[self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10):self.index_buff_mean_rnds]  # Last n/10 elements
+            first = self.buff_mean_rnds[:self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10)]  # First 9n/10 elements
+
+
+            #if mean_var > self.rnd_high_threshold :
+            if np.abs(np.mean(last) - np.mean(first)) < 0.05*np.mean(last):
+                unc = (unc/self.uncertainty_const)
                 self.rnd_predictor.set_uncertainty(unc)
                 self.rnd_target.set_uncertainty(unc)
-        elif mean_var > self.rnd_high_threshold:
-            unc = (unc/self.uncertainty_const)
-            self.rnd_predictor.set_uncertainty(unc)
-            self.rnd_target.set_uncertainty(unc)
+        
         return
 
 
@@ -193,13 +231,19 @@ class Agent:
             expl_action = MultivariateNormal(action.squeeze(-1), torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])).sample()
             expl_action = torch.clamp(expl_action, min = - self.max_speed, max = self.max_speed)
             return expl_action """
+            
         if variance == 0: return action
-        
-        dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
+        try:
+            dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
+            
+        except:
+            print('error in get action, no positive definite matrix')
+            print(f'variance is: {variance}')
+            dist = MultivariateNormal(action.squeeze(-1), 0.2 * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
+
         expl_action = dist.sample()
         expl_action = torch.clamp(expl_action, min = - self.max_speed, max = self.max_speed)
         return expl_action
-    
 
     def calculate_intrisic_reward(self, state):
 

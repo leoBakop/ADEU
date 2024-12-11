@@ -101,7 +101,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     "gamma": 0.99,
     "c": c,
     "min_mem_size": batch_size,
-    "learning_rate": 1e-3,  #everything is with -4 except mountain car which is -3
+    "learning_rate": 1e-3,  
     "tau": 0.001,  # it was 0.005
     "action_size": env.action_space.shape[0],
     "alpha": 0.7,  # for PER
@@ -110,12 +110,13 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb,mod_rn
     "train_frequency": 2,  # 2 for everything
     "adaptive_exploration": adaptive_exploration,
     "mod_rnd":mod_rnd,
-    "eps":0.01,
+    "eps":0.05,
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
 
-    pretraining = 0.03
+    pretraining = 0.2
+    #pretraining = 0.07
     agent = (Agent(**agent_params) if not comb else Pretrained_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
 
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
@@ -146,7 +147,7 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
     network_loss = 0
     mean_var_per_episode = 0 
     agent.rollout_episode = False
-
+    t = 0
     
 
     for episode in tqdm(range(horizon)):
@@ -158,11 +159,14 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
             wandb.log({'error of the rnd network': rnd_loss})
             wandb.log({'reward during training': summed_reward /(100//percentage)})
             wandb.log({'Critic network loss': network_loss/(100//percentage)})
+            wandb.log({'uncertainty of the agent': agent.rnd_predictor.get_uncertainty() if adaptive_exploration else 0})
             summed_reward = 0
             network_loss = 0
             #I am using the arg_var_per_episode instead of rnd_loss, to get the maximum uncertainty during the previous episode
-            if mod_rnd: agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = var_per_episode[episode -1 if episode > 0 else 0])
-            mean_var_per_episode = 0
+            if mod_rnd:
+                max_var = var_per_episode[episode -1 if episode > 0 else 0] if t >timesteps/20 else np.inf
+                agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = max_var)
+                mean_var_per_episode = 0
             tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
@@ -206,7 +210,7 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
         agent.rollout_episode = False
         arg_var_per_episode[episode] = np.argmax(var)
         var_per_episode[episode] = np.max(var)
-        mean_var_per_episode+=np.mean(value_of_rnd[:t+1])
+        mean_var_per_episode+=np.mean(var[:t+1])
     env.close()
     eval_env.close()
     wandb.finish()
@@ -214,7 +218,7 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
 
 def wandb_session(domain , seed = 0, name = None, code = 0, debug = False):
     # start a new wandb run to track this script
-    project = "debug" if debug else f"Post AAMAS| NAF, Adaptive Exploration {domain}"
+    project = "debug" if debug else f"Mod RND| NAF, Adaptive Exploration {domain}"
     wandb.init(
         # set the wandb project where this run will be logged
         project=project,
@@ -270,8 +274,8 @@ if __name__ == '__main__':
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
-    parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
-    parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
+    parser.add_argument('--dom', type=str, default='Humanoid-v5', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--steps', type=int, default=250, help='what are the maximum timesteps per episode')
    
     args = parser.parse_args()
 
@@ -285,7 +289,7 @@ if __name__ == '__main__':
     comb = args.comb
     mod_rnd = args.mod_rnd
     per = args.per
-    horizon = int(50_000_000 / timesteps) #everythin is 50M
+    horizon = int(50_000_000 / timesteps) #everythin is 50M EXCEPT FROM HUMANOID STANDUP AND half cheetah which is 5
     if timesteps <= 200:
         horizon = int(horizon/10)
 

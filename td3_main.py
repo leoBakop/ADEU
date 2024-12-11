@@ -101,7 +101,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
     "mod_rnd":mod_rnd,
     "per":per,
     "adaptive_exploration": adaptive_exploration,
-    "decay": int(0.05 * horizon * timesteps),
+    "eps":0.03,
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
@@ -164,6 +164,11 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
             current_observation = np.concatenate([arr for arr in current_observation.values()])
         current_observation = torch.FloatTensor(current_observation)
         total_reward = 0
+        if agent.rollout_episode: 
+            agent.rollout_episode = False
+        #check for rollout episode
+        if adaptive_exploration and np.random.rand() < agent.eps: 
+            agent.rollout_episode = True
         
         for t in range(timesteps):
         
@@ -188,7 +193,7 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
                 break
         arg_var_per_episode[episode] = np.argmax(var)
         var_per_episode[episode] = np.max(var)
-        
+        agent.rollout_episode = False
         if (episode % int(.05 * horizon)) == 0:
             np.save(path + f'/stored_data/uncertainty_of_{episode}th_episode.npy', var)
     env.close()
@@ -237,7 +242,8 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
 def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False, mod_rnd = False, per = False):
     retval = 20 if mod_rnd else 0
     retval+= 100 if per else 0
-    if mod_rnd and retval: sys.exit(-1)
+    #if mod_rnd and noisy_nets: sys.exit(-1)
+    if per and use_rnd: sys.exit(-1)
     if comb:
         if not adaptive_exploration: sys.exit(-1)
         return retval + 4
@@ -245,17 +251,18 @@ def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False
     if adaptive_exploration: return retval + 1
     if use_rnd: return retval + 2
     if mod_rnd: sys.exit(-1)
-    return retval 
+    return retval
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--ade', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--noisy_nets', action='store_true', default=False)
-    parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
-    parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
+    parser.add_argument('--noisy_nets', action='store_true', default=True)
+    parser.add_argument('--comb', action='store_true', default=True, help='Would you like to utilize both Bolztmann and ade')
+    parser.add_argument('--mod_rnd', action='store_true', default=True, help='Heuristically modify the Uncertainty')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
-    parser.add_argument('--dom', type=str, default='Hopper-v4', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
    
     args = parser.parse_args()
