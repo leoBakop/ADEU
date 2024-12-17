@@ -226,14 +226,9 @@ class Pretrained_TD3_Agent(TD3):
     def get_variance(self):
         if (self.baseline_exploration):
             if self.use_noisy_nets:
-                return  self.noisy_agent.get_variance()
-            
-            v = self.model.get_noise_cov()
-            v = v.detach().cpu().numpy().reshape(v.shape[-1], v.shape[-1])
-            v = np.array([v[i,i]for i in range(v.shape[0])])
-            v = np.mean(v)
-            return v,v
-
+                return  self.policy_noise
+            v = self.policy_noise
+            return v
         return  super().get_variance()
 
     def step(self, state, action, reward, next_state, done, timestep):

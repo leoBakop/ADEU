@@ -61,7 +61,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
     label = [a for a in arguments.keys() if arguments[a] ][0]
     label = label+" per" if per else label
     label = label + " mod_rnd" if mod_rnd else label
-    name = f'TD3, using {label}, seed:{seed}'
+    name = f'{label}, seed:{seed}'
     debug = False
     wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
     
@@ -94,18 +94,18 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
     "noise_clip":0.5,
     "policy_freq":2,
     "lr": 3e-4,
-    "train_frequency": 1,
+    "train_frequency": 2,
     "batch_size": batch_size,
     "min_mem_size": batch_size,
     "buffer_size": 1e+5,
     "mod_rnd":mod_rnd,
     "per":per,
     "adaptive_exploration": adaptive_exploration,
-    "eps":0.03,
+    "eps":0.3, #it was 0.05
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
-    pretraining = 0.05
+    pretraining = 0.007
     filename = f"./experiments/TD3/{domain}/{label}/seed_{seed}"
     if not os.path.exists(filename+'/stored_data'):
         os.makedirs(filename+'/stored_data')
@@ -140,21 +140,28 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
     summed_reward = 0
     tmp_network_loss = 0
     network_loss = 0
-
+    mean_var_per_episode = 0 
+    agent.rollout_episode = False
+    t = 0
     
 
     for episode in tqdm(range(horizon)):
         var = np.zeros(timesteps)
+        value_of_rnd = np.zeros(timesteps)
         if episode % int(round(100/percentage)) == 0:
             wandb.log({"timestep with max uncertanty": arg_var_per_episode[episode -1 if episode > 0 else 0]})
             wandb.log({"max uncertanty": var_per_episode[episode -1 if episode > 0 else 0]})
             wandb.log({'error of the rnd network': rnd_loss})
             wandb.log({'reward during training': summed_reward /(100//percentage)})
             wandb.log({'Critic network loss': network_loss/(100//percentage)})
+            wandb.log({'uncertainty of the agent': agent.rnd_predictor.get_uncertainty() if adaptive_exploration else 0})
+
             summed_reward = 0
             network_loss = 0
-            if mod_rnd: agent.evaluate_rnd_netowrk(rnd_loss = arg_var_per_episode[episode -1 if episode > 0 else 0])
-
+            if mod_rnd:
+                max_var = var_per_episode[episode -1 if episode > 0 else 0] if t >timesteps/20 else 100
+                agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = max_var)
+                mean_var_per_episode = 0
             tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
@@ -203,7 +210,7 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
 
 def wandb_session(domain , seed = 0, name = None, code = 0, debug = False):
     # start a new wandb run to track this script
-    project = "debug" if debug else f"Post AAMAS| TD3, Adaptive Exploration {domain}"
+    project = "debug" if debug else f"Mod RND| TD3, Adaptive Exploration {domain}"
     wandb.init(
         # set the wandb project where this run will be logged
         project=project,
@@ -256,11 +263,11 @@ def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--ade', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--noisy_nets', action='store_true', default=True)
-    parser.add_argument('--comb', action='store_true', default=True, help='Would you like to utilize both Bolztmann and ade')
-    parser.add_argument('--mod_rnd', action='store_true', default=True, help='Heuristically modify the Uncertainty')
+    parser.add_argument('--noisy_nets', action='store_true', default=False)
+    parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
+    parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')

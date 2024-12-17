@@ -206,7 +206,8 @@ def run(env, eval_env, domain, horizon, path, agent:Agent, timesteps, adaptive_e
                 #wandb.log({domain+"mean_reward": total_reward/(t+1), "loss": loss/(t+1)})
                 summed_reward+=total_reward
                 break
-        if (episode % int(.05 * horizon)) == 0: np.save(path+f'/stored_data/variance_of_{episode}th_episode.npy', var)
+        if (episode % int(.05 * horizon)) == 0: 
+            np.save(path+f'/stored_data/variance_of_{episode}th_episode.npy', var)
         agent.rollout_episode = False
         arg_var_per_episode[episode] = np.argmax(var)
         var_per_episode[episode] = np.max(var)

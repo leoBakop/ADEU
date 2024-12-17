@@ -232,14 +232,9 @@ class Agent:
             expl_action = torch.clamp(expl_action, min = - self.max_speed, max = self.max_speed)
             return expl_action """
             
-        if variance == 0: return action
-        try:
-            dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
-            
-        except:
-            print('error in get action, no positive definite matrix')
-            print(f'variance is: {variance}')
-            dist = MultivariateNormal(action.squeeze(-1), 0.2 * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
+        if variance < 1e-3: return action
+        
+        dist = MultivariateNormal(action.squeeze(-1), variance * torch.eye(action.squeeze(-1).shape[1],action.squeeze(-1).shape[1])) 
 
         expl_action = dist.sample()
         expl_action = torch.clamp(expl_action, min = - self.max_speed, max = self.max_speed)
