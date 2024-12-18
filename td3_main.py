@@ -105,7 +105,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
-    pretraining = 0.007
+    pretraining = 0.03
     filename = f"./experiments/TD3/{domain}/{label}/seed_{seed}"
     if not os.path.exists(filename+'/stored_data'):
         os.makedirs(filename+'/stored_data')
