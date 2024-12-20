@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 import random
-from q_learning_agent import Q_Learning_Agent, IR_Q_Learning_Agent
+from q_learning_agent import Q_Learning_Agent, IR_Q_Learning_Agent, UCB_Q_Learning
 from tabular_evaluate import evaluate
 import wandb
 from tqdm import tqdm
@@ -34,6 +34,7 @@ def wandb_session(domain , seed = 0, name = None, code = 0, debug = False, beta 
 
 def main(seed, code, label):
     set_seed(seed)
+    use_wandb = False
     name = f'{label}, seed:{seed}'
     
     """ State code in frozen lake
@@ -63,11 +64,17 @@ def main(seed, code, label):
     if code == 2:
         agent_params['beta'] = 0.8
         agent = IR_Q_Learning_Agent(**agent_params)
+    elif code == 5:
+        agent_params['num_of_agents'] = 5
+        agent_params['lambda_value'] = 0.5
+        agent_params['p'] = 0.5
+        agent = UCB_Q_Learning(**agent_params)
     else: 
         agent = Q_Learning_Agent(**agent_params)
-    wandb_session(domain = 'FrozenLake-v1', seed = seed, debug = False, code = code, name = name, beta = agent_params['beta'] if code ==2 else 0)
+        if use_wandb:
+            wandb_session(domain = 'FrozenLake-v1', seed = seed, debug = False, code = code, name = name, beta = agent_params['beta'] if code ==2 else 0)
 
-    state_count = run(env=env, agent=agent, render=render, horizon = 1_000_000, desc = desc, dim= dim, label=label)
+    state_count = run(env=env, agent=agent, render=render, horizon = 1_000_000, desc = desc, dim= dim, label=label, use_wandb=use_wandb, code = code)
     store(filename = f'experiments/tabular/FrozenLake/{label}/seed_{seed}', state_count = state_count, agent_params=agent_params)
     
 def store(filename, state_count, agent_params):
@@ -82,7 +89,7 @@ def store(filename, state_count, agent_params):
             f.write(f"{key}: {value}\n")
 
 
-def run(env:gym.Env, agent:Q_Learning_Agent, horizon = 1_000, timesteps = 300, render = False, label = 0, desc = None, dim = 50):
+def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 300, render = False, label = 0, desc = None, dim = 50, use_wandb = True):
     epsilon = np.linspace(1, 0.1, int(0.5 * horizon))
     percentage = 1
     normalizer = dim*(dim+1)/2
@@ -103,8 +110,11 @@ def run(env:gym.Env, agent:Q_Learning_Agent, horizon = 1_000, timesteps = 300, r
                 reward = + 100000 if ( reward == 1) else -10 #yeah that is correct
             else:
                 reward = new_obs/normalizer
-                 
-            agent.step([obs, action, reward, new_obs, done or truncated])
+                if code == 5:
+                    mask = np.random.binomial(1, agent.p, agent.num_of_agents)
+                    agent.step([obs, action, reward, new_obs, done or truncated, mask])
+                else:
+                    agent.step([obs, action, reward, new_obs, done or truncated])
             obs = new_obs
             
             if done or truncated:
@@ -133,7 +143,7 @@ if  __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--ucb', action='store_true', default=True, help='Would you like to use the standrad RND')
 
     args = parser.parse_args()
 

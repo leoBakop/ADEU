@@ -34,6 +34,7 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
                 break
+    print('evaluatoion was ended')
     wandb.log({"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
