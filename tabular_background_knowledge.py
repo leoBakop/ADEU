@@ -15,6 +15,7 @@ from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 import argparse
 import sys
 import os
+import pickle
 
 def set_seed(seed):
     print('setting seeds')
@@ -77,8 +78,12 @@ def rollout(agent:Q_Learning_Agent, normalizer, timesteps, horizon, map):
 
     for ep in range(horizon):
         *_, experience = evaluate(agent = agent, timesteps = timesteps, evaluation_episodes = 1, label = 'creating_rollout', episode = ep, iterations = 10, desc=map, normalizer=normalizer, save_experience=True, wandb_log=False)
-    
 
+        
+        with open(f"experience_ep_{ep}.pkl", "wb") as file:
+            pickle.dump(experience, file)
+
+    return experience
 
 def main(seed):
     dim = 12
@@ -92,8 +97,8 @@ def main(seed):
     agent = Q_Learning_Agent(**agent_params)
     timesteps = 300
     states_count, agent, normalizer = generate_agent (map = desc, env = env, agent = agent, timesteps = timesteps, horizon = int(1e4), dim=dim)
-    rollout(agent=agent, normalizer=normalizer, timesteps=timesteps, horizon=1, map =desc)
-
+    experience = rollout(agent=agent, normalizer=normalizer, timesteps=timesteps, horizon=1, map =desc)
+    
 
 
 if __name__=='__main__':

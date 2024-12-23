@@ -111,7 +111,8 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
         agent.set_eps(epsilon[episode if episode < epsilon.size else -1])
         obs, _ = env.reset()
         for t in range(timesteps):
-            states_count[reverse_hash(obs,dim)]+=1
+            row, col = reverse_hash(obs,dim)
+            states_count[row, col]+=1
             if render: env.render()
             
             if code == 5: 
@@ -120,10 +121,18 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
             else: action = agent.get_action(obs)
             
             new_obs, reward, done, truncated, info = env.step(action)
-            if done :
-                reward = + 100000 if ( reward == 1) else -10 #yeah that is correct
+            
+            if desc[row][col] == 'H':
+                reward = -10
+                done = True
+            if desc[row][col] == 'G':
+                reward = 100_000
+                done = True
             else:
                 reward = new_obs/normalizer
+                done = False
+                truncated = False
+                
                 if code == 5:
                     mask = np.random.binomial(1, agent.p, agent.num_of_agents)
                     agent.step([obs, action, reward, new_obs, done or truncated, mask])
@@ -131,7 +140,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
                     agent.step([obs, action, reward, new_obs, done or truncated])
             obs = new_obs
             
-            if (done or truncated):
+            if (done):
                 break
     env.close()
     wandb.finish()

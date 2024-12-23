@@ -6,6 +6,7 @@ from q_learning_agent import Q_Learning_Agent
 from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 
 def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, save_experience = False, wandb_log = True):
+    dim = len(desc)
     env = make_evaluation_env(iterations, episode, label, desc)
     env.reset(seed = np.random.randint(low = 1, high = 9e+10))
     mean_reward = np.zeros(evaluation_episodes)
@@ -19,10 +20,21 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
         for t in range(timesteps):
             action = agent.get_clear_action(current_observation)# User-defined policy function
             new_observation, reward, done, truncated, info = env.step(action) 
-            if done :
-                reward = + 100000 if ( reward == 1) else -10 #yeah that is correct
+            row, col = reverse_hash(new_observation,dim)
+            
+            if desc[row][col] == 'H':
+                reward = -10
+                done = True
+            if desc[row][col] == 'G':
+                reward = 100_000
+                done = True
             else:
                 reward = new_observation/normalizer
+                done = False
+                truncated = False
+                
+                
+            
             total_reward += reward
             if save_experience:
                 experience.append([current_observation, action, reward, new_observation, done or truncated])
@@ -31,7 +43,8 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
                 #wandb.log({domain+'evaluation_rewards':reward})
             mean_timesteps[episode] = t
             current_observation = new_observation
-            if (done or truncated) or t == timesteps - 1:
+
+            if done or t == timesteps - 1:
                 mean_timesteps[episode] = t+1
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
@@ -52,3 +65,10 @@ def make_evaluation_env(iterations, episode, label, desc, **kwargs):
     
     
     return eval_env
+
+
+def reverse_hash(hash_code, ncols):
+    row = hash_code // ncols
+    col = hash_code % ncols
+    return row, col
+    
