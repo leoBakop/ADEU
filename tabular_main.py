@@ -55,7 +55,7 @@ def main(seed, code, label, heads = 0):
     render = False
     dim = 10
     desc = generate_random_map(size=dim, seed = seed)
-    env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = None)
+    env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = 'rgb_array')
     env.reset(seed = seed)
     agent_params = {
         'state_size':env.observation_space.n, 
@@ -171,9 +171,9 @@ if  __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--ucb', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--heads', type=int, default=8, help='Would you like to use the standrad RND')
+    parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
     args = parser.parse_args()
 
     # Access hyperparameters in your script
