@@ -5,39 +5,41 @@ from gym.wrappers import RecordVideo
 from q_learning_agent import Q_Learning_Agent
 from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 
-def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer):
+def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, save_experience = False, wandb_log = True):
     env = make_evaluation_env(iterations, episode, label, desc)
     env.reset(seed = np.random.randint(low = 1, high = 9e+10))
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
     mean_sum_reward = np.zeros(evaluation_episodes)
-
+    experience = []
     average_rewards = np.zeros(timesteps)
     for episode in range(evaluation_episodes):
         current_observation, info = env.reset()
         total_reward = 0
         for t in range(timesteps):
             action = agent.get_clear_action(current_observation)# User-defined policy function
-            current_observation, reward, done, truncated, info = env.step(action) 
+            new_observation, reward, done, truncated, info = env.step(action) 
             if done :
                 reward = + 100000 if ( reward == 1) else -10 #yeah that is correct
             else:
-                reward = current_observation/normalizer
-            
+                reward = new_observation/normalizer
             total_reward += reward
+            if save_experience:
+                experience.append([current_observation, action, reward, new_observation, done or truncated])
             average_rewards[t] += reward/evaluation_episodes
             #if episode == 0:
                 #wandb.log({domain+'evaluation_rewards':reward})
             mean_timesteps[episode] = t
-            if done:
+            current_observation = new_observation
+            if (done or truncated) or t == timesteps - 1:
                 mean_timesteps[episode] = t+1
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
                 break
-    print('evaluatoion was ended')
-    wandb.log({"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
+    if wandb_log:
+        wandb.log({"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
     env.close()
-    return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
+    return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward), experience
 
 
 

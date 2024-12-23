@@ -20,7 +20,7 @@ class Q_Learning_Agent():
     def step(self, tuple):
         obs, action, reward, new_obs, done  = tuple 
         self.q_table[obs, action] += self.learning_rate * (reward + self.gamma *np.max(self.q_table[new_obs])*(1-done) - self.q_table[obs, action])
-
+        return 
     def set_eps(self, new_eps):
         self.eps = new_eps
         
@@ -53,7 +53,8 @@ class UCB_Q_Learning():
         pass
     
     def set_eps(self, new_eps = None):
-        new_eps = 0.1
+        if new_eps is None:
+            return
         for agent in self.agents:
             agent.set_eps(new_eps)
         return
@@ -63,6 +64,9 @@ class UCB_Q_Learning():
         obs, action, reward, new_obs, done, masks  = tuple 
         for a in np.where(masks == 1)[0]:
             self.agents[a].step([obs, action, reward, new_obs, done])
+        return 
+            
+            
     def get_clear_action(self, obs):
         def obj(action):
             q_values = np.array([a.q_table[obs, action] for a in self.agents])
@@ -85,19 +89,52 @@ class UCB_Q_Learning():
     def get_action(self, obs):
         self.set_eps()
         actions = np.array([a.get_action(obs) for a in self.agents])
+        actions = np.unique(actions)
         
         def obj(action):
             q_values = np.array([a.q_table[obs, action] for a in self.agents])
-            retval = np.mean(q_values) + self.lambda_value*np.std(q_values)
-            return retval
+            retval = np.mean(q_values) + self.lambda_value*np.std(q_values) if self.num_of_agents > 0 else 0    
+            return retval, np.std(q_values)
+        
         max_action = -1
         max_ucb = -np.inf
+        max_std = -np.inf
         for action in actions:
-            temp_obj = obj(action)
+            temp_obj, std = obj(action)
             if temp_obj > max_ucb:
                 max_action = action
                 max_ucb = temp_obj
-                
+                max_std = std
         if max_action == -1:
             raise ValueError        
-        return max_action
+        return max_action, max_std
+    
+    
+    
+class ADEU_Q_Learning(Q_Learning_Agent):
+    
+    
+    def __init__(self, state_size, action_size, beta):
+        super().__init__(state_size, action_size)
+        self.beta = beta
+        self.n = 0.1*np.ones(state_size)
+        
+    def get_action(self, obs):
+        #getting all the q values for the corresponding state
+        qs = self.q_table[obs]
+        exploration_rate = self.beta * np.sqrt(self.n[obs]) * qs
+        exploration_rate = np.clip(exploration_rate, 0 , 100)
+        probs = np.exp(exploration_rate)
+        probs/= np.sum(probs)
+        
+        action = np.random.choice(np.arange(0, self.action_size), size = 1, p = probs)
+        return action[0]
+    
+    
+    def set_eps(*_):
+        return
+    
+    def step(self, tuple):
+        obs, action, reward, new_obs, done  = tuple 
+        self.n[new_obs] += 1
+        return super().step(tuple)
