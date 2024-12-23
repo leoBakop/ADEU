@@ -114,12 +114,23 @@ class UCB_Q_Learning():
 class ADEU_Q_Learning(Q_Learning_Agent):
     
     
-    def __init__(self, state_size, action_size, beta):
+    def __init__(self, state_size, action_size, beta, rollout_frequency):
         super().__init__(state_size, action_size)
         self.beta = beta
         self.n = 0.1*np.ones(state_size)
+        self.eps = 1
+        self.rollout = False
+        self.rollout_frequency = rollout_frequency
         
     def get_action(self, obs):
+        if self.rollout:
+            p = np.random.rand()
+            if p < self.eps:
+                #return a random move
+                return np.random.randint(0, self.action_size)
+            return np.argmax(self.q_table[obs])
+        
+        
         #getting all the q values for the corresponding state
         qs = self.q_table[obs]
         exploration_rate = self.beta * np.sqrt(self.n[obs]) * qs
@@ -131,7 +142,8 @@ class ADEU_Q_Learning(Q_Learning_Agent):
         return action[0]
     
     
-    def set_eps(*_):
+    def set_eps(self, eps):
+        self.eps = eps
         return
     
     def step(self, tuple):

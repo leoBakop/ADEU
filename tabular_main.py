@@ -53,9 +53,9 @@ def main(seed, code, label, heads = 0):
         30 31  32  33 34 35"""    
     
     render = False
-    dim = 17
+    dim = 10
     desc = generate_random_map(size=dim, seed = seed)
-    env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = "rgb_array")
+    env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = None)
     env.reset(seed = seed)
     agent_params = {
         'state_size':env.observation_space.n, 
@@ -67,7 +67,7 @@ def main(seed, code, label, heads = 0):
         agent = IR_Q_Learning_Agent(**agent_params)
     elif code == 5:
         if heads == 1: beta = 0
-        else: beta = 1.2
+        else: beta = 1.5
         agent_params['num_of_agents'] = heads
         agent_params['lambda_value'] = beta
         agent_params['p'] = 0.95
@@ -75,6 +75,7 @@ def main(seed, code, label, heads = 0):
     elif code == 1:
         beta = 0.01
         agent_params['beta'] = beta
+        agent_params['rollout_frequency'] = 0.3
         agent = ADEU_Q_Learning(**agent_params)
     else: 
         agent = Q_Learning_Agent(**agent_params)
@@ -103,6 +104,9 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
     mean_std = 0
     states_count = np.zeros([dim,dim])
     for episode in tqdm(range(horizon)):
+        if code == 1 and np.random.rand()<agent.rollout_frequency:
+            agent.rollout = True
+        
         #after some timesteps perform the evaluation
         if episode % int(round(100/percentage)) == 0:
             evaluate(agent, timesteps, evaluation_episodes = 3, label = label, episode = episode, iterations = int(0.2*horizon), desc = desc, normalizer=normalizer)
@@ -142,6 +146,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
             
             if (done):
                 break
+        if code == 1: agent.rollout == False
     env.close()
     wandb.finish()
     return states_count
@@ -166,9 +171,9 @@ if  __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--ucb', action='store_true', default=True, help='Would you like to use the standrad RND')
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
+    parser.add_argument('--heads', type=int, default=8, help='Would you like to use the standrad RND')
     args = parser.parse_args()
 
     # Access hyperparameters in your script
