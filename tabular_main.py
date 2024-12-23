@@ -67,7 +67,7 @@ def main(seed, code, label, heads = 0):
         agent = IR_Q_Learning_Agent(**agent_params)
     elif code == 5:
         if heads == 1: beta = 0
-        else: beta = 1.5
+        else: beta = 10
         agent_params['num_of_agents'] = heads
         agent_params['lambda_value'] = beta
         agent_params['p'] = 0.95
@@ -82,7 +82,7 @@ def main(seed, code, label, heads = 0):
     
     wandb_session(domain = 'FrozenLake-v1', seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
 
-    state_count = run(env=env, agent=agent, render=render, horizon = 1_000_000, desc = desc, dim= dim, label=label, code = code)
+    state_count = run(env=env, agent=agent, render=render, horizon = int(1e4), desc = desc, dim= dim, label=label, code = code)
     store(filename = f'experiments/tabular/FrozenLake/{label}/seed_{seed}', state_count = state_count, agent_params=agent_params)
     
 def store(filename, state_count, agent_params):
@@ -114,9 +114,10 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
             mean_std = 0
         agent.set_eps(epsilon[episode if episode < epsilon.size else -1])
         obs, _ = env.reset()
+        row, col = reverse_hash(obs,dim)
+        states_count[row, col]+=1
         for t in range(timesteps):
-            row, col = reverse_hash(obs,dim)
-            states_count[row, col]+=1
+            
             if render: env.render()
             
             if code == 5: 
@@ -125,11 +126,13 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
             else: action = agent.get_action(obs)
             
             new_obs, reward, done, truncated, info = env.step(action)
-            
+
+            row, col = reverse_hash(new_obs,dim)
+            states_count[row, col]+=1
             if desc[row][col] == 'H':
                 reward = -10
                 done = True
-            if desc[row][col] == 'G':
+            elif desc[row][col] == 'G':
                 reward = 100_000
                 done = True
             else:
@@ -137,16 +140,17 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
                 done = False
                 truncated = False
                 
-                if code == 5:
-                    mask = np.random.binomial(1, agent.p, agent.num_of_agents)
-                    agent.step([obs, action, reward, new_obs, done or truncated, mask])
-                else:
-                    agent.step([obs, action, reward, new_obs, done or truncated])
+            if code == 5:
+                mask = np.random.binomial(1, agent.p, agent.num_of_agents)
+                agent.step([obs, action, reward, new_obs, done or truncated, mask])
+            else:
+                agent.step([obs, action, reward, new_obs, done or truncated])
             obs = new_obs
             
             if (done):
                 break
-        if code == 1: agent.rollout == False
+        if code == 1: 
+            agent.rollout = False
     env.close()
     wandb.finish()
     return states_count
@@ -169,7 +173,6 @@ if  __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
@@ -189,7 +192,7 @@ if  __name__ == '__main__':
     }
     
     
-    label = [a for a in arguments.keys() if arguments[a] ][0]
+    label = [a for a in arguments.keys() if arguments[a]][0]
     
     seed = 10
     code = code_creation(adaptive_exploration=use_ade, use_rnd = use_im, ucb=use_ucb )

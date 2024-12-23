@@ -25,9 +25,11 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
             if desc[row][col] == 'H':
                 reward = -10
                 done = True
-            if desc[row][col] == 'G':
+                truncated= True
+            elif desc[row][col] == 'G':
                 reward = 100_000
                 done = True
+                truncated= True
             else:
                 reward = new_observation/normalizer
                 done = False
