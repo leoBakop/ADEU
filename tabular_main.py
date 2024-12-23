@@ -53,9 +53,9 @@ def main(seed, code, label, heads = 0):
         30 31  32  33 34 35"""    
     
     render = False
-    dim = 10
+    dim = 30
     desc = generate_random_map(size=dim, seed = seed)
-    env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = 'rgb_array')
+    env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = None)
     env.reset(seed = seed)
     agent_params = {
         'state_size':env.observation_space.n, 
@@ -70,7 +70,7 @@ def main(seed, code, label, heads = 0):
         else: beta = 10
         agent_params['num_of_agents'] = heads
         agent_params['lambda_value'] = beta
-        agent_params['p'] = 0.95
+        agent_params['p'] = 0.99
         agent = UCB_Q_Learning(**agent_params)
     elif code == 1:
         beta = 0.01
@@ -82,7 +82,7 @@ def main(seed, code, label, heads = 0):
     
     wandb_session(domain = 'FrozenLake-v1', seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
 
-    state_count = run(env=env, agent=agent, render=render, horizon = int(1e4), desc = desc, dim= dim, label=label, code = code)
+    state_count = run(env=env, agent=agent, render=render, horizon = int(1e5), desc = desc, dim= dim, label=label, code = code)
     store(filename = f'experiments/tabular/FrozenLake/{label}/seed_{seed}', state_count = state_count, agent_params=agent_params)
     
 def store(filename, state_count, agent_params):
@@ -98,7 +98,8 @@ def store(filename, state_count, agent_params):
 
 
 def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 300, render = False, label = 0, desc = None, dim = 50):
-    epsilon = np.linspace(1, 0.1, int(0.5 * horizon))
+    initial_exploration_rate = 1 
+    epsilon = np.linspace(initial_exploration_rate, 0.05, int(0.6 * horizon))
     percentage = 1
     normalizer = dim*(dim+1)/2
     mean_std = 0

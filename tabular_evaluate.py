@@ -23,7 +23,7 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
             row, col = reverse_hash(new_observation,dim)
             
             if desc[row][col] == 'H':
-                reward = -10
+                reward = 0
                 done = True
                 truncated= True
             elif desc[row][col] == 'G':
@@ -60,11 +60,11 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
 
 
 def make_evaluation_env(iterations, episode, label, desc, **kwargs):
-    eval_env = gym.make('FrozenLake-v1',desc = desc, is_slippery = False, render_mode = 'rgb_array', **kwargs)
+    eval_env = gym.make('FrozenLake-v1',desc = desc, is_slippery = False, render_mode = None, **kwargs)
     
-    if episode % iterations != 0: return eval_env 
+    """ if episode % iterations != 0: return eval_env 
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/tabular/{label}/FrozenLake-v1/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'FrozenLake-v1_true_epside_{episode}')
-    
+     """
     
     return eval_env
 

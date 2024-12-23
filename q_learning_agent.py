@@ -67,7 +67,7 @@ class UCB_Q_Learning():
         return 
             
             
-    def get_clear_action(self, obs):
+    """ def get_clear_action(self, obs):
         def obj(action):
             q_values = np.array([a.q_table[obs, action] for a in self.agents])
             return np.mean(q_values)
@@ -83,8 +83,12 @@ class UCB_Q_Learning():
                 
         if max_action == -1:
             raise ValueError        
-        return max_action
+        return max_action """
         
+    def get_clear_action(self, obs):
+        actions = np.array([a.get_clear_action(obs) for a in self.agents])
+        most_common_action = np.bincount(actions).argmax()
+        return most_common_action
         
     def get_action(self, obs):
         self.set_eps()
@@ -99,6 +103,7 @@ class UCB_Q_Learning():
         max_action = -1
         max_ucb = -np.inf
         max_std = -np.inf
+        #actions = np.arange(self.action_size)
         for action in actions:
             temp_obj, std = obj(action)
             if temp_obj > max_ucb:
