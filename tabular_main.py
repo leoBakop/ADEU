@@ -18,6 +18,7 @@ def set_seed(seed):
     
 def wandb_session(domain , seed = 0, name = None, code = 0, debug = False, beta = 0, heads = 0):
     # start a new wandb run to track this script
+    
     project = "debug" if debug else f"Mod RND| Tabular, Adaptive Exploration {domain}"
     wandb.init(
         # set the wandb project where this run will be logged
@@ -30,9 +31,23 @@ def wandb_session(domain , seed = 0, name = None, code = 0, debug = False, beta 
         'heads':heads 
         }
     )
-    
 
-def main(seed, code, label, heads = 0):
+
+def generate_custom_map(dim):
+    desc = []
+    initial_line = "SF" + "".join(["H" for _ in range(dim - 2)])
+    desc.append(initial_line)
+    #constructing the vertical path
+    for _ in range(3, dim): 
+        desc.append("HF" + "".join(["H" for _ in range(dim - 2)]))   
+    line_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))     
+    #cosntructing the horizontal path
+    desc.append(line_before)
+    final_line = "".join(["H" for _ in range(dim - 1)])+"G"
+    desc.append(final_line)
+    return desc
+
+def main(seed, code, label, heads = 0, type_of_map = 0):
     set_seed(seed)
     beta = 0
     name = f'{label}, seed:{seed}'
@@ -53,8 +68,12 @@ def main(seed, code, label, heads = 0):
         30 31  32  33 34 35"""    
     
     render = False
-    dim = 30
-    desc = generate_random_map(size=dim, seed = seed)
+    dim = 1500
+    if type_of_map == 0:
+        desc = generate_random_map(size=dim, seed = seed)
+    else:
+        desc = generate_custom_map(dim = dim)
+        
     env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = None)
     env.reset(seed = seed)
     agent_params = {
@@ -75,14 +94,15 @@ def main(seed, code, label, heads = 0):
     elif code == 1:
         beta = 0.01
         agent_params['beta'] = beta
-        agent_params['rollout_frequency'] = 0.3
+        agent_params['rollout_frequency'] = 0.05
         agent = ADEU_Q_Learning(**agent_params)
     else: 
         agent = Q_Learning_Agent(**agent_params)
     
-    wandb_session(domain = 'FrozenLake-v1', seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
+    domain = "FrozenLake" if type_of_map == 0 else "CustomFrozenLake"
+    wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
 
-    state_count = run(env=env, agent=agent, render=render, horizon = int(1e5), desc = desc, dim= dim, label=label, code = code)
+    state_count = run(env=env, agent=agent, render=render, horizon = int(1e5), desc = desc, dim= dim, label=label, code = code, tofl = tofl, timesteps = int(3*dim))
     store(filename = f'experiments/tabular/FrozenLake/{label}/seed_{seed}', state_count = state_count, agent_params=agent_params)
     
 def store(filename, state_count, agent_params):
@@ -97,7 +117,7 @@ def store(filename, state_count, agent_params):
             f.write(f"{key}: {value}\n")
 
 
-def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 300, render = False, label = 0, desc = None, dim = 50):
+def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0):
     initial_exploration_rate = 1 
     epsilon = np.linspace(initial_exploration_rate, 0.05, int(0.6 * horizon))
     percentage = 1
@@ -126,6 +146,8 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
                 mean_std += std*percentage/(timesteps*100)
             else: action = agent.get_action(obs)
             
+            if tofl != 0 and action == 3:
+                action = np.random.choice(np.arange(2), size = 1)[0]
             new_obs, reward, done, truncated, info = env.step(action)
 
             row, col = reverse_hash(new_obs,dim)
@@ -134,10 +156,15 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
                 reward = -10
                 done = True
             elif desc[row][col] == 'G':
+                print ('target was founded')
                 reward = 100_000
                 done = True
+            elif desc[row][col] == 'S':
+                reward = 0
+                done = False
+                truncated = False
             else:
-                reward = new_obs/normalizer
+                reward = dim*new_obs/normalizer
                 done = False
                 truncated = False
                 
@@ -178,6 +205,7 @@ if  __name__ == '__main__':
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
+    parser.add_argument('--tofl', type=int, default=10, help='Would you like to use the standrad RND')
     args = parser.parse_args()
 
     # Access hyperparameters in your script
@@ -185,6 +213,7 @@ if  __name__ == '__main__':
     use_ade = args.adeu
     use_ucb = args.ucb
     heads = args.heads
+    tofl = args.tofl
     arguments = {
         'adeu': use_ade,
         'intrisic motivation':use_im,
@@ -198,4 +227,4 @@ if  __name__ == '__main__':
     seed = 10
     code = code_creation(adaptive_exploration=use_ade, use_rnd = use_im, ucb=use_ucb )
     for s in range(seed):
-        main(seed = s, code = code, label = label, heads = heads)
+        main(seed = s, code = code, label = label, heads = heads, type_of_map=tofl)

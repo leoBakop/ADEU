@@ -5,7 +5,8 @@ class Q_Learning_Agent():
         
         self.state_size = state_size
         self.action_size = action_size
-        self.q_table =  10*np.random.rand(self.state_size, self.action_size)
+        self.q_table =  np.random.rand(self.state_size, self.action_size)
+        #self.q_table = np.zeros([self.state_size, self.action_size])
         self.eps = 1
         self.learning_rate = 0.8
         self.gamma = 0.95
@@ -128,6 +129,7 @@ class ADEU_Q_Learning(Q_Learning_Agent):
         self.rollout_frequency = rollout_frequency
         
     def get_action(self, obs):
+        
         if self.rollout:
             p = np.random.rand()
             if p < self.eps:
@@ -135,13 +137,11 @@ class ADEU_Q_Learning(Q_Learning_Agent):
                 return np.random.randint(0, self.action_size)
             return np.argmax(self.q_table[obs])
 
-        if np.random.rand() < 0.05:
-                #return a random move
-                return np.random.randint(0, self.action_size)
+
         #getting all the q values for the corresponding state
         qs = self.q_table[obs]
-        exploration_rate = self.beta * sigmoid(self.n[obs]) * qs
-        exploration_rate = np.clip(exploration_rate, 0 , 100)
+        exploration_rate =  sigmoid( self.n[obs]) * qs
+        exploration_rate = np.clip(exploration_rate, 0 , 10)
         probs = np.exp(exploration_rate)
         probs/= np.sum(probs)
         
@@ -156,10 +156,10 @@ class ADEU_Q_Learning(Q_Learning_Agent):
     
     def step(self, tuple):
         obs, action, reward, new_obs, done  = tuple 
-        self.n[new_obs] += 1
+        self.n[new_obs] += self.beta
         return super().step(tuple)
     
     
 
 def sigmoid(x):
-    return 1/(1 + np.exp(-x)) 
+    return 1/(1 + np.exp(-x)) -0.5
