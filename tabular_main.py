@@ -205,6 +205,7 @@ if  __name__ == '__main__':
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
+    #tofl means typo of frozen lake
     parser.add_argument('--tofl', type=int, default=10, help='Would you like to use the standrad RND')
     args = parser.parse_args()
 
