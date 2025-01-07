@@ -523,3 +523,92 @@ class TD3(object):
         scaled_state = (max_value - min_value) * normalized_state + min_value
 
         return scaled_state
+    
+    
+    
+    
+class UCB_TD3_Agent:
+    def __init__(self, N, lambda_parameter, agent_params, beta= 0.99):
+        self.N = N
+        self.agents  = [TD3(**agent_params) for _ in range(self.N)]
+        self.lambda_value = lambda_parameter
+        self.beta = beta
+        if torch.cuda.is_available(): self.device = torch.device("cuda")
+        else: self.device = torch.device("cpu")
+        self.variance = 0
+        return
+    
+    def get_variance(self):
+        return self.variance
+    
+    def step(self, state, action, reward, next_state, done, timestep):
+        loss = []
+        mask = np.random.binomial(1, self.beta, self.N)
+        for i, agent in enumerate(self.agents):
+            #add experience in the buffer of each agent
+            if mask[i] == 1:
+                agent.buffer.add(state, action, reward, next_state, done)
+            #train every agent in some experienve derived by its buffer
+            if len(agent.buffer) > agent.min_mem_size and ((timestep % agent.train_frequency) == 0):
+                experiences = agent.buffer.sample()
+                l = agent.train_basic(experiences).detach().cpu().numpy()
+                loss.append(l)
+        
+        return np.mean(np.array(loss)), 0
+    
+    def get_action(self, state):
+        modified = False
+        action_dim = self.agents[0].action_dim
+        actions = torch.Tensor([a.get_action(state) for a in self.agents])
+        state = state.to(self.device).unsqueeze(0)        
+        def obj(action):
+            action = torch.from_numpy(np.array([action], dtype=np.float32)).to(self.device)
+            with torch.no_grad():
+                q_values = np.array([np.min(a.critic(state, action)[0].detach().cpu().numpy()) for a in self.agents])
+            retval = np.mean(q_values) + self.lambda_value*np.std(q_values) if self.N > 0 else 0    
+            return retval, np.std(q_values)
+        
+        
+        max_action = np.zeros(action_dim) - 153
+        max_ucb = -np.inf
+        max_std = -np.inf
+        #actions = np.arange(self.action_size)
+        for action in actions:
+            temp_obj, std = obj(action)
+            if temp_obj > max_ucb:
+                modified = True
+                max_action = action
+                max_ucb = temp_obj
+                max_std = std
+        if not modified:
+            raise ValueError      
+        
+        self.variance = max_std  
+        return max_action.numpy()
+    
+    def get_clear_action(self, obs):
+        modified = False
+        action_dim = self.agents[0].action_dim
+        actions = [a.get_action(obs) for a in self.agents]
+        obs = obs.to(self.device).unsqueeze(0)
+        def obj(action):
+            action = torch.from_numpy(np.array([action], dtype=np.float32)).to(self.device)
+            with torch.no_grad():
+                q_values = np.array([np.min(a.critic(obs, action)[0].detach().cpu().numpy()) for a in self.agents])
+            retval = np.mean(q_values)  
+            return retval
+        
+        
+        max_action = np.zeros(action_dim) - 153
+        max_ucb = -np.inf
+        max_std = -np.inf
+        #actions = np.arange(self.action_size)
+        for action in actions:
+            temp_obj = obj(action)
+            if temp_obj > max_ucb:
+                modified = True
+                max_action = action
+                max_ucb = temp_obj
+        if not modified:
+            raise ValueError        
+        return max_action

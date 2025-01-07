@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
-from td3_agent import TD3
+from td3_agent import TD3, UCB_TD3_Agent
 from combined_agent import Pretrained_TD3_Agent
 import os
 from copy import copy
@@ -18,7 +18,6 @@ import random
 from gymnasium.wrappers import TransformObservation
 from network import UNCERTAINTY
 from td3_evaluate import evaluate
-
 
 
 
@@ -41,7 +40,7 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_rnd, per, **kwargs):
+def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per, **kwargs):
     set_seed(seed)
     adaptive_exploration = ade
     #kwargs={
@@ -51,6 +50,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
     #just for printing
     arguments = {
         'Baseline+ade':comb,
+        'UCB': ucb,
         'ade': ade,
         'rnd':use_rnd,
         'noisy_nets':noisy_nets,
@@ -63,7 +63,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
     debug = False
-    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
+    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
     
     
     
@@ -109,8 +109,12 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, noisy_nets, comb, mod_r
     filename = f"./experiments/TD3/{domain}/{label}/seed_{seed}"
     if not os.path.exists(filename+'/stored_data'):
         os.makedirs(filename+'/stored_data')
-    agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
-
+    if not ucb:
+        agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
+    else:
+        N = 5
+        agent_params['train_frequency']*=N
+        agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=1.5, beta = 0.99)
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
         run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, path = filename, mod_rnd = mod_rnd)
     agent_params['horizon']=horizon
@@ -246,7 +250,7 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
             f.write(f"{key}: {value}\n")
 
     return
-def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False, mod_rnd = False, per = False):
+def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False, mod_rnd = False, per = False, ucb = False):
     retval = 20 if mod_rnd else 0
     retval+= 100 if per else 0
     #if mod_rnd and noisy_nets: sys.exit(-1)
@@ -257,6 +261,7 @@ def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False
     if noisy_nets:return retval + 3
     if adaptive_exploration: return retval + 1
     if use_rnd: return retval + 2
+    if ucb: return retval + 5
     if mod_rnd: sys.exit(-1)
     return retval
 
@@ -268,6 +273,7 @@ if __name__ == '__main__':
     parser.add_argument('--noisy_nets', action='store_true', default=False)
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
+    parser.add_argument('--UCB', action='store_true', default=True, help='Create a UCB agent')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
@@ -284,6 +290,7 @@ if __name__ == '__main__':
     comb = args.comb
     mod_rnd = args.mod_rnd
     per = args.per
+    ucb = args.UCB
     horizon = int(40_000_000 / timesteps) #hopeer:20M  fetch reach 15M, cheetah 4M, 20M: iverted double pendalum
     if timesteps <= 200:
         horizon = int(horizon/10)
@@ -294,7 +301,7 @@ if __name__ == '__main__':
     
     mean_evaluation_rewards = []
 
-    print(f"{domain} + code:{code_creation(adaptive_exploration=ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb, per=per, mod_rnd=mod_rnd)}")
+    print(f"{domain} + code:{code_creation(adaptive_exploration=ade, ucb = ucb, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb, per=per, mod_rnd=mod_rnd)}")
 
     for s in range(seeds):
-        main(seed = s, horizon=horizon, timesteps=timesteps, domain=domain, ade = ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb =comb, per=per, mod_rnd = mod_rnd)
+        main(seed = s, horizon=horizon, timesteps=timesteps, ucb = ucb, domain=domain, ade = ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb =comb, per=per, mod_rnd = mod_rnd)
