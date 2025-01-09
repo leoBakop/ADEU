@@ -129,7 +129,7 @@ class TD3(object):
         
         self.mod_rnd = mod_rnd
         if self.mod_rnd:
-            self.rnd_low_threshold = 0.2
+            self.rnd_low_threshold = 0.15 #it was 0.2
             self.rnd_high_threshold = 40
             #self.rnd_high_threshold should be in the range of [5,40]
             print(f'the rnd mean threshold is {self.rnd_high_threshold}')
@@ -203,6 +203,7 @@ class TD3(object):
         s = torch.clamp(s, min = -5, max = 5)
         #s = self.scale(s) #new code, normilize the value between -1 1 iff the values are too low
         variance = self.calculate_intrisic_reward(s) #it was just state
+        variance = sigmoid(variance) * self.policy_noise
         #variance = .1 in case of constant variance
         self.variance = variance #self.variance servs as a buffer
         #if np.random.rand()< self.eps: return MultivariateNormal(torch.from_numpy(clear_action), variance * torch.eye(clear_action.shape[0],clear_action.shape[0])).sample().detach().cpu().numpy() 
@@ -253,7 +254,7 @@ class TD3(object):
             if self.use_rnd:
                 loss= self.train_using_rnd( experiences)
             elif self.per:
-                self.train_basic_per(experiences)
+                loss = self.train_basic_per(experiences)
             else:
                 loss = self.train_basic(experiences)    
             
@@ -345,8 +346,8 @@ class TD3(object):
         #in all the experiments the rng_high_threshold was set to 40 and in invertedpendulum to 10. 
         if self.index_buff_mean_rnds > 60:
             last = self.buff_mean_rnds[self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10):self.index_buff_mean_rnds]  # Last n/10 elements
-            first = self.buff_mean_rnds[:self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10)]  # First 9n/10 elements
-
+            #first = self.buff_mean_rnds[:self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10)]  # First 9n/10 elements
+            first = self.buff_mean_rnds[self.index_buff_mean_rnds-4*(self.index_buff_mean_rnds // 10):self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10)]  #the last 3n/10
 
             #if mean_var > self.rnd_high_threshold :
             if np.abs(np.mean(last) - np.mean(first)) < 0.05*np.mean(last):
@@ -542,7 +543,8 @@ class UCB_TD3_Agent:
         return self.variance
     
     def step(self, state, action, reward, next_state, done, timestep):
-        loss = []
+        loss = 0
+        i = 0
         mask = np.random.binomial(1, self.beta, self.N)
         for i, agent in enumerate(self.agents):
             #add experience in the buffer of each agent
@@ -550,11 +552,12 @@ class UCB_TD3_Agent:
                 agent.buffer.add(state, action, reward, next_state, done)
             #train every agent in some experienve derived by its buffer
             if len(agent.buffer) > agent.min_mem_size and ((timestep % agent.train_frequency) == 0):
+                i+=1
                 experiences = agent.buffer.sample()
-                l = agent.train_basic(experiences).detach().cpu().numpy()
-                loss.append(l)
+                l = agent.train_basic(experiences)
+                loss+=l
         
-        return np.mean(np.array(loss)), 0
+        return loss/i, 0
     
     def get_action(self, state):
         modified = False
@@ -566,7 +569,7 @@ class UCB_TD3_Agent:
             with torch.no_grad():
                 q_values = np.array([np.min(a.critic(state, action)[0].detach().cpu().numpy()) for a in self.agents])
             retval = np.mean(q_values) + self.lambda_value*np.std(q_values) if self.N > 0 else 0    
-            return retval, np.std(q_values)
+            return retval, self.lambda_value*np.std(q_values)
         
         
         max_action = np.zeros(action_dim) - 153
@@ -612,3 +615,8 @@ class UCB_TD3_Agent:
         if not modified:
             raise ValueError        
         return max_action
+    
+    
+    
+def sigmoid(x):
+    return 1/(1 + np.exp(-x))

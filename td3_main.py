@@ -93,15 +93,15 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     "policy_noise":0.2,
     "noise_clip":0.5,
     "policy_freq":2,
-    "lr": 3e-4,
-    "train_frequency": 2,
+    "lr": 5e-5,##it was 3e-4,
+    "train_frequency": 2, #it was 2, 
     "batch_size": batch_size,
     "min_mem_size": batch_size,
     "buffer_size": 1e+5,
     "mod_rnd":mod_rnd,
     "per":per,
     "adaptive_exploration": adaptive_exploration,
-    "eps":0.3, #it was 0.05
+    "eps":0.001, #it was 0.3
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets
     }
@@ -114,7 +114,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     else:
         N = 5
         agent_params['train_frequency']*=N
-        agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=1.5, beta = 0.99)
+        agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=5, beta = 1)
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
         run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, path = filename, mod_rnd = mod_rnd)
     agent_params['horizon']=horizon
@@ -147,11 +147,13 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
     mean_var_per_episode = 0 
     agent.rollout_episode = False
     t = 0
+    tmp_mean, tmp_r, tmp_duration, tmp_cum = 0,0,0,0
     
 
     for episode in tqdm(range(horizon)):
         var = np.zeros(timesteps)
         value_of_rnd = np.zeros(timesteps)
+        
         if episode % int(round(100/percentage)) == 0:
             wandb.log({"timestep with max uncertanty": arg_var_per_episode[episode -1 if episode > 0 else 0]})
             wandb.log({"max uncertanty": var_per_episode[episode -1 if episode > 0 else 0]})
@@ -166,10 +168,16 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
                 max_var = var_per_episode[episode -1 if episode > 0 else 0] if t >timesteps/20 else 100
                 agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = max_var)
                 mean_var_per_episode = 0
+               
             tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
+                
+        if (episode % int(horizon/5) == int(horizon/5)-1) and mod_rnd:
+                agent.train_frequency+=1
+                print(f'training frequency was updated to {agent.train_frequency}')        
+        
         current_observation, info = env.reset() #seed is not used as the documentation indicates
         if isinstance(current_observation, dict):
             current_observation = np.concatenate([arr for arr in current_observation.values()])
@@ -188,7 +196,7 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
             observation, reward, done, truncated, info = env.step(action)
             if isinstance(observation, dict):
                 observation = np.concatenate([arr for arr in observation.values()])
-            tmp_network_loss, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done, timestep=t) #push that in memory
+            tmp_network_loss, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done or truncated, timestep=t) #push that in memory
             #just to have a good plotting
             rnd_loss = tmp_rnd_loss if (adaptive_exploration or use_rnd) and tmp_rnd_loss > 0 else rnd_loss
             network_loss += tmp_network_loss
@@ -273,7 +281,7 @@ if __name__ == '__main__':
     parser.add_argument('--noisy_nets', action='store_true', default=False)
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
-    parser.add_argument('--UCB', action='store_true', default=True, help='Create a UCB agent')
+    parser.add_argument('--UCB', action='store_true', default=False, help='Create a UCB agent')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
@@ -297,7 +305,7 @@ if __name__ == '__main__':
 
         
 
-    seeds = 3
+    seeds = 1
     
     mean_evaluation_rewards = []
 
