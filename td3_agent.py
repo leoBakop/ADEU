@@ -89,7 +89,8 @@ class TD3(object):
         adaptive_exploration = True,
         eps = 0.01,
         use_rnd = False,
-        use_noisy_nets = False
+        use_noisy_nets = False,
+        uncertainty_const = 1.5,
     ):
         if torch.cuda.is_available(): self.device = torch.device("cuda")
         else: self.device = torch.device("cpu")
@@ -133,13 +134,14 @@ class TD3(object):
             self.rnd_high_threshold = 40
             #self.rnd_high_threshold should be in the range of [5,40]
             print(f'the rnd mean threshold is {self.rnd_high_threshold}')
-            self.uncertainty_const = 1.5
+            self.uncertainty_const = uncertainty_const
             self.iter_mod_rnd = 0
             self.max_rnd_history = 20
             self.buff_rnds = np.zeros(self.max_rnd_history)
             self.full = False
             self.buff_mean_rnds = np.zeros(self.max_rnd_history*100000) #it is just a huge nymebr i don't care that much
             self.index_buff_mean_rnds = 0
+            self.evaluate_rnd_counter = 0 #counter that keeps track on how many times the evaluate_rnd_netowrk(..) has already run
         
         ####################################################
         if self.adaptive_exploration or self.use_rnd:
@@ -312,7 +314,8 @@ class TD3(object):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
         return critic_loss
 
-    def evaluate_rnd_netowrk(self, mean_var, max_var, ):
+    def evaluate_rnd_netowrk(self, mean_var, max_var ):
+        self.evaluate_rnd_counter+=1 #counter that keeps track on how many times the evaluate_rnd_netowrk(..) has already run
         if not self.mod_rnd: 
             print('Something wrong with the mod rnd')
             return
@@ -333,27 +336,31 @@ class TD3(object):
         unc = self.rnd_predictor.get_uncertainty()
 
         
+        if not (self.evaluate_rnd_counter % 5 == 0): return #the modification of the uncertainty should be occur every 5 times
+         
+        #I should fucking find a way to trak how mach the mean var changes during the episode.
+        #if it remains the same then I should decrease rge threshold.
+        if self.index_buff_mean_rnds > 2*self.max_rnd_history:
+            last = self.buff_mean_rnds[self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10):self.index_buff_mean_rnds]  # Last n/10 elements
+            #first = self.buff_mean_rnds[:self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10)]  # First 9n/10 elements
+            first = self.buff_mean_rnds[self.index_buff_mean_rnds-4*(self.index_buff_mean_rnds // 10):self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10)]  #the last 3n/10
+
+            #if the network has not changed much,  and the np.mean(last) is high
+            #the uncertainty is very high and the network learns slow
+            if np.abs(np.mean(last) - np.mean(first)) < 0.05*max(np.mean(last), np.mean(first))  and np.mean(last) > self.policy_noise*0.8:
+                unc = (unc/self.uncertainty_const)
+                self.rnd_predictor.set_uncertainty(unc)
+                self.rnd_target.set_uncertainty(unc)
+                
+                
+                
         mean_max_var = np.mean(self.buff_rnds)
         #it was max_var < self.rnd_low_threshold:
         if mean_max_var < self.rnd_low_threshold:
              unc = (unc * self.uncertainty_const)
              self.rnd_predictor.set_uncertainty(unc)
              self.rnd_target.set_uncertainty(unc)
-             return
-         
-        #I should fucking find a way to trak how mach the mean var changes during the episode.
-        #if it remains the same then I should decrease rge threshold.
-        #in all the experiments the rng_high_threshold was set to 40 and in invertedpendulum to 10. 
-        if self.index_buff_mean_rnds > 60:
-            last = self.buff_mean_rnds[self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10):self.index_buff_mean_rnds]  # Last n/10 elements
-            #first = self.buff_mean_rnds[:self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10)]  # First 9n/10 elements
-            first = self.buff_mean_rnds[self.index_buff_mean_rnds-4*(self.index_buff_mean_rnds // 10):self.index_buff_mean_rnds-(self.index_buff_mean_rnds // 10)]  #the last 3n/10
-
-            #if mean_var > self.rnd_high_threshold :
-            if np.abs(np.mean(last) - np.mean(first)) < 0.05*np.mean(last):
-                unc = (unc/self.uncertainty_const)
-                self.rnd_predictor.set_uncertainty(unc)
-                self.rnd_target.set_uncertainty(unc)
+             
         
         return
 
@@ -525,6 +532,8 @@ class TD3(object):
 
         return scaled_state
     
+    def modify_train_frequency(self, new_train_fr):
+        self.train_frequency = new_train_fr
     
     
     
@@ -538,6 +547,10 @@ class UCB_TD3_Agent:
         else: self.device = torch.device("cpu")
         self.variance = 0
         return
+    
+    def save(self, filename):
+        for i, a in enumerate(self.agents):
+            a.save(filename=filename+f"/agent_{i}")
     
     def get_variance(self):
         return self.variance
@@ -558,6 +571,10 @@ class UCB_TD3_Agent:
                 loss+=l
         
         return loss/i, 0
+    
+    def modify_train_frequency(self, new_train_fr):
+        for a in self.agents:
+            a.modify_train_frequency(new_train_fr)
     
     def get_action(self, state):
         modified = False
@@ -620,3 +637,6 @@ class UCB_TD3_Agent:
     
 def sigmoid(x):
     return 1/(1 + np.exp(-x))
+
+""" def custom_sigmoid(x, k=1):
+    return 1 - np.exp(-k * x) """

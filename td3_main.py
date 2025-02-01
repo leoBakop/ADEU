@@ -40,7 +40,7 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per, **kwargs):
+def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per,include_pos, **kwargs):
     set_seed(seed)
     adaptive_exploration = ade
     #kwargs={
@@ -63,13 +63,12 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
     debug = False
-    wandb_session(domain, seed, name=name, code=code_creation(use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
     
     
+    kwargs['exclude_current_positions_from_observation'] = not include_pos
     
     env = gym.make(domain, **kwargs)
-    eval_env = gym.make(domain, render_mode = 'rgb_array', **kwargs)
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/{domain}', episode_trigger= lambda x:  x % 1000 == 9, name_prefix=f'{domain}_')
+
 
 
     seed = seed
@@ -77,12 +76,13 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     observation, info = env.reset(seed=seed)
     if isinstance(observation, dict):
             observation = np.concatenate([arr for arr in observation.values()])
-    eval_env.reset(seed=seed)
 
 
     batch_size = 256
+    lr = 5e-5 #it was 3e-4 ,
+    uncertainty_const = 1.05
     print(f"actions are limited between [{-env.action_space.high[0]} and {env.action_space.high[0]}]")
-
+    print(f"Shape of an observation: {len(observation)}")
     agent_params = {
     "state_dim": len(observation),
     "action_dim": env.action_space.shape[0],
@@ -90,20 +90,21 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     'seed':seed,
     "discount": 0.99,
     "tau": 0.005,
-    "policy_noise":0.2,
+    "policy_noise":0.2, 
     "noise_clip":0.5,
     "policy_freq":2,
-    "lr": 5e-5,##it was 3e-4,
-    "train_frequency": 2, #it was 2, 
+    "lr": lr,
+    "train_frequency": 1, #it was 2, 
     "batch_size": batch_size,
     "min_mem_size": batch_size,
     "buffer_size": 1e+5,
     "mod_rnd":mod_rnd,
     "per":per,
     "adaptive_exploration": adaptive_exploration,
-    "eps":0.001, #it was 0.3
+    "eps":0.3, #it was 0.0005
     "use_rnd": use_rnd,
-    "use_noisy_nets": noisy_nets
+    "use_noisy_nets": noisy_nets,
+    "uncertainty_const" : uncertainty_const
     }
     pretraining = 0.03
     filename = f"./experiments/TD3/{domain}/{label}/seed_{seed}"
@@ -115,21 +116,24 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
         N = 5
         agent_params['train_frequency']*=N
         agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=5, beta = 1)
-    mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode = \
-        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, eval_env = eval_env, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, path = filename, mod_rnd = mod_rnd)
+    wandb_session(domain, include_pos = include_pos, name=name, lr = lr, uc = uncertainty_const, code=code_creation(use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
+    mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, total_timesteps = \
+        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, path = filename, mod_rnd = mod_rnd)
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
     agent_params['networks_uncertainty'] = UNCERTAINTY
     agent_params['pretraining_time'] = pretraining
-    
+    agent_params['total_timesteps'] = total_timesteps
     store(filename, mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
     
-    if not comb: store_network(agent=agent, path = filename)
+    if not comb or ucb: store_network(agent=agent, path = filename)
     env.close()
     return mean_evaluation_rewards
 
 
-def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd,  **kwargs):
+def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd,  **kwargs):
+    total_timesteps = 0
+    max_timesteps_reached = False
     mean_reward = np.zeros(horizon)
     percentage = 1
     mean_evaluation_rewards = np.zeros(int(percentage*horizon/100)+100)
@@ -152,7 +156,6 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
 
     for episode in tqdm(range(horizon)):
         var = np.zeros(timesteps)
-        value_of_rnd = np.zeros(timesteps)
         
         if episode % int(round(100/percentage)) == 0:
             wandb.log({"timestep with max uncertanty": arg_var_per_episode[episode -1 if episode > 0 else 0]})
@@ -173,10 +176,11 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
-                
-        if (episode % int(horizon/5) == int(horizon/5)-1) and mod_rnd:
-                agent.train_frequency+=1
-                print(f'training frequency was updated to {agent.train_frequency}')        
+        
+        if total_timesteps > 1.2e+6 and not max_timesteps_reached:
+            max_timesteps_reached = True
+            print('1.2 timesteps reached')        
+            agent.modify_train_frequency(250)
         
         current_observation, info = env.reset() #seed is not used as the documentation indicates
         if isinstance(current_observation, dict):
@@ -190,7 +194,7 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
             agent.rollout_episode = True
         
         for t in range(timesteps):
-        
+            total_timesteps+=1
             action = agent.get_action(current_observation)# User-defined policy function
             var[t] = agent.get_variance()
             observation, reward, done, truncated, info = env.step(action)
@@ -210,27 +214,31 @@ def run(env, eval_env, domain, horizon, agent:TD3, timesteps, adaptive_explorati
                 mean_reward[episode] = total_reward/(t+1)
                 summed_reward+=total_reward
                 break
+        network_loss/= t #just to plot the average of the network loss. Otherwise it depends on the timesteps that the agent survived
         arg_var_per_episode[episode] = np.argmax(var)
         var_per_episode[episode] = np.max(var)
+        mean_var_per_episode+= np.mean(var[:t])#that is a new line
         agent.rollout_episode = False
         if (episode % int(.05 * horizon)) == 0:
             np.save(path + f'/stored_data/uncertainty_of_{episode}th_episode.npy', var)
     env.close()
-    eval_env.close()
     wandb.finish()
-    return mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_episode, var_per_episode
+    return mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_episode, var_per_episode, total_timesteps
 
-def wandb_session(domain , seed = 0, name = None, code = 0, debug = False):
+def wandb_session(domain , include_pos, uc=1.5, name = None, code = 0, lr = 0, debug = False):
     # start a new wandb run to track this script
-    project = "debug" if debug else f"Mod RND| TD3, Adaptive Exploration {domain}"
+    project = f"ECAI-2025| TD3, Adaptive Exploration {domain}" if not include_pos \
+            else f"ECAI-2025| TD3, Adaptive Exploration {domain}, including position" 
+    project = "debug" if debug else project
     wandb.init(
         # set the wandb project where this run will be logged
         project=project,
         name = name,
         # track hyperparameters and run metadata
         config={
-        "seed": seed,
-        "code":code
+        "code":code,
+        "lr":lr,
+        "unc_cost": uc
         }
     )
     
@@ -282,6 +290,7 @@ if __name__ == '__main__':
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
     parser.add_argument('--UCB', action='store_true', default=False, help='Create a UCB agent')
+    parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
@@ -299,17 +308,30 @@ if __name__ == '__main__':
     mod_rnd = args.mod_rnd
     per = args.per
     ucb = args.UCB
-    horizon = int(40_000_000 / timesteps) #hopeer:20M  fetch reach 15M, cheetah 4M, 20M: iverted double pendalum
+    include_pos = args.include_pos
+    horizon = int(15_000_000 / timesteps) 
     if timesteps <= 200:
         horizon = int(horizon/10)
 
         
 
-    seeds = 1
+    seeds = 3
     
     mean_evaluation_rewards = []
 
     print(f"{domain} + code:{code_creation(adaptive_exploration=ade, ucb = ucb, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb, per=per, mod_rnd=mod_rnd)}")
 
     for s in range(seeds):
-        main(seed = s, horizon=horizon, timesteps=timesteps, ucb = ucb, domain=domain, ade = ade, use_rnd=use_rnd, noisy_nets=noisy_nets, comb =comb, per=per, mod_rnd = mod_rnd)
+        main(seed = s, 
+             horizon=horizon, 
+             timesteps=timesteps, 
+             ucb = ucb, 
+             domain=domain, 
+             ade = ade, 
+             use_rnd=use_rnd, 
+             noisy_nets=noisy_nets, 
+             comb =comb, 
+             per=per, 
+             mod_rnd = mod_rnd,
+             include_pos = include_pos
+             )

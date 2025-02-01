@@ -68,7 +68,7 @@ def main(seed, code, label, heads = 0, type_of_map = 0):
         30 31  32  33 34 35"""    
     
     render = False
-    dim = 1500
+    dim = 1500 if tofl > 0 else 50
     if type_of_map == 0:
         desc = generate_random_map(size=dim, seed = seed)
     else:
@@ -201,11 +201,11 @@ if  __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--im', action='store_true', default=True, help='Would you like to use the standrad RND')
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
-    #tofl means typo of frozen lake
+    #tofl means type of frozen lake
     parser.add_argument('--tofl', type=int, default=10, help='Would you like to use the standrad RND')
     args = parser.parse_args()
 
