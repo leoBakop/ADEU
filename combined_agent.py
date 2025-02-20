@@ -160,7 +160,8 @@ class Pretrained_TD3_Agent(TD3):
                 adaptive_exploration=True, 
                 eps = 0.01,
                 use_rnd=False, 
-                use_noisy_nets=False):
+                use_noisy_nets=False,
+                uncertainty_const= 1.5):
         
         if (not adaptive_exploration):sys.exit(-1)
         super().__init__(   state_dim=state_dim, 
@@ -182,7 +183,9 @@ class Pretrained_TD3_Agent(TD3):
                             adaptive_exploration=adaptive_exploration, 
                             eps=eps, 
                             use_rnd=use_rnd, 
-                            use_noisy_nets=False)
+                            use_noisy_nets=False,
+                            uncertainty_const=uncertainty_const
+                            )
         
         if use_noisy_nets:
             self.use_noisy_nets = True
@@ -205,7 +208,9 @@ class Pretrained_TD3_Agent(TD3):
                             eps=eps, 
                             use_rnd=False, 
                             use_noisy_nets=False,
-                            adaptive_exploration = False,)
+                            adaptive_exploration = False,
+                            uncertainty_const=uncertainty_const
+                            )
         self.baseline_exploration = True
         self.varience = 0
         self.horizon = horizon

@@ -9,8 +9,8 @@ from gym.wrappers import RecordVideo
 
 
 
-def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, iterations,**kwargs):
-    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, label = label, **kwargs)
+def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, iterations, debug,**kwargs):
+    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, label = label, debug = debug, **kwargs)
     env.reset(seed = np.random.randint(low = 1, high = 9e+10))
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
@@ -43,7 +43,9 @@ def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, 
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
 
-def make_evaluation_env(dom, iterations, episode, label, **kwargs):
+def make_evaluation_env(dom, iterations, episode, label, debug, **kwargs):
+    if debug:
+        return gym.make(dom, render_mode = 'none', **kwargs)
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
     if episode % iterations != 0: return eval_env 
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/TD3/{dom}/{label}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')

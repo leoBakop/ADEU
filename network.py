@@ -165,7 +165,7 @@ class NAF(nn.Module):
 
 
 
-UNCERTAINTY = 70#it was 187.5
+UNCERTAINTY = 187.5#it was  70
 
 class RND_Network(nn.Module):
     def __init__(self, device, input_size = 10, hidden_size = 64, max_speed = 1):

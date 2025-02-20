@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
-from td3_agent import TD3, UCB_TD3_Agent
+from td3_agent import TD3, UCB_TD3_Agent, TD3_Ensemble_ADEU
 from combined_agent import Pretrained_TD3_Agent
 import os
 from copy import copy
@@ -40,7 +40,7 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per,include_pos, **kwargs):
+def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per,include_pos,adeu_ensemble, **kwargs):
     set_seed(seed)
     adaptive_exploration = ade
     #kwargs={
@@ -51,6 +51,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     arguments = {
         'Baseline+ade':comb,
         'UCB': ucb,
+        'Adeu+ensemble':adeu_ensemble,
         'ade': ade,
         'rnd':use_rnd,
         'noisy_nets':noisy_nets,
@@ -64,8 +65,8 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     name = f'{label}, seed:{seed}'
     debug = False
     
-    
-    kwargs['exclude_current_positions_from_observation'] = not include_pos
+    if include_pos:
+        kwargs['exclude_current_positions_from_observation'] = not include_pos
     
     env = gym.make(domain, **kwargs)
 
@@ -106,19 +107,35 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     "use_noisy_nets": noisy_nets,
     "uncertainty_const" : uncertainty_const
     }
-    pretraining = 0.03
+    pretraining = 0.05
     filename = f"./experiments/TD3/{domain}/{label}/seed_{seed}"
     if not os.path.exists(filename+'/stored_data'):
         os.makedirs(filename+'/stored_data')
-    if not ucb:
+    if adeu_ensemble:
+        N = 5
+        agent_params['train_frequency']*=N
+        agent = TD3_Ensemble_ADEU(agent_params = agent_params, N = N, lambda_parameter=1, beta = 1)
+    elif not ucb:
         agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
     else:
         N = 5
         agent_params['train_frequency']*=N
-        agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=5, beta = 1)
-    wandb_session(domain, include_pos = include_pos, name=name, lr = lr, uc = uncertainty_const, code=code_creation(use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per), debug = debug)
+        agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=10, beta = 1)
+    wandb_session(domain, include_pos = include_pos, name=name, lr = lr, uc = uncertainty_const, code=code_creation(use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per, adeu_ensemble=adeu_ensemble), debug = debug)
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, total_timesteps = \
-        run(**kwargs, domain = domain, env=env, horizon = horizon, agent = agent, timesteps=timesteps, adaptive_exploration = adaptive_exploration, use_rnd=use_rnd, label = label, path = filename, mod_rnd = mod_rnd)
+        run(**kwargs, 
+            domain = domain, 
+            env=env, 
+            horizon = horizon, 
+            agent = agent, 
+            timesteps=timesteps, 
+            adaptive_exploration = adaptive_exploration, 
+            use_rnd=use_rnd, 
+            label = label, 
+            path = filename, 
+            mod_rnd = mod_rnd,
+            debug = debug,
+            )
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
     agent_params['networks_uncertainty'] = UNCERTAINTY
@@ -131,7 +148,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     return mean_evaluation_rewards
 
 
-def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd,  **kwargs):
+def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd, debug,  **kwargs):
     total_timesteps = 0
     max_timesteps_reached = False
     mean_reward = np.zeros(horizon)
@@ -172,7 +189,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
                 agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = max_var)
                 mean_var_per_episode = 0
                
-            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label)
+            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label, debug = debug)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
@@ -266,7 +283,7 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
             f.write(f"{key}: {value}\n")
 
     return
-def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False, mod_rnd = False, per = False, ucb = False):
+def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False, mod_rnd = False, per = False, ucb = False, adeu_ensemble = False):
     retval = 20 if mod_rnd else 0
     retval+= 100 if per else 0
     #if mod_rnd and noisy_nets: sys.exit(-1)
@@ -278,6 +295,7 @@ def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False
     if adaptive_exploration: return retval + 1
     if use_rnd: return retval + 2
     if ucb: return retval + 5
+    if adeu_ensemble: return retval + 6
     if mod_rnd: sys.exit(-1)
     return retval
 
@@ -290,6 +308,7 @@ if __name__ == '__main__':
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
     parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
     parser.add_argument('--UCB', action='store_true', default=False, help='Create a UCB agent')
+    parser.add_argument('--adeu_ensemble', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
@@ -308,8 +327,20 @@ if __name__ == '__main__':
     mod_rnd = args.mod_rnd
     per = args.per
     ucb = args.UCB
+    adeu_ensemble = args.adeu_ensemble
     include_pos = args.include_pos
-    horizon = int(15_000_000 / timesteps) 
+    #horizon: hopper 10M, 
+    # humanoid 80M
+    #walker 10M
+    horizon = {
+        'Hopper-v5':10e6,
+        'Humanoid-v5':80e6,
+        'Walker2d-v5':10e6,
+        'HalfCheetah-v5':10e6,
+        'Pusher-v5':10e6
+    }
+
+    horizon = int(horizon[domain] / timesteps) 
     if timesteps <= 200:
         horizon = int(horizon/10)
 
@@ -319,7 +350,7 @@ if __name__ == '__main__':
     
     mean_evaluation_rewards = []
 
-    print(f"{domain} + code:{code_creation(adaptive_exploration=ade, ucb = ucb, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb, per=per, mod_rnd=mod_rnd)}")
+    print(f"{domain} + code:{code_creation(adaptive_exploration=ade, ucb = ucb, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb, per=per, mod_rnd=mod_rnd, adeu_ensemble=adeu_ensemble)}")
 
     for s in range(seeds):
         main(seed = s, 
@@ -333,5 +364,6 @@ if __name__ == '__main__':
              comb =comb, 
              per=per, 
              mod_rnd = mod_rnd,
-             include_pos = include_pos
+             include_pos = include_pos,
+             adeu_ensemble = adeu_ensemble
              )

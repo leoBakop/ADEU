@@ -19,7 +19,7 @@ def set_seed(seed):
 def wandb_session(domain , seed = 0, name = None, code = 0, debug = False, beta = 0, heads = 0):
     # start a new wandb run to track this script
     
-    project = "debug" if debug else f"Mod RND| Tabular, Adaptive Exploration {domain}"
+    project = "debug" if debug else f"ECAI-2025| Tabular, Adaptive Exploration {domain}"
     wandb.init(
         # set the wandb project where this run will be logged
         project=project,
@@ -68,7 +68,7 @@ def main(seed, code, label, heads = 0, type_of_map = 0):
         30 31  32  33 34 35"""    
     
     render = False
-    dim = 1500 if tofl > 0 else 50
+    dim =  1500 if tofl > 0 else 50
     if type_of_map == 0:
         desc = generate_random_map(size=dim, seed = seed)
     else:
@@ -102,8 +102,18 @@ def main(seed, code, label, heads = 0, type_of_map = 0):
     domain = "FrozenLake" if type_of_map == 0 else "CustomFrozenLake"
     wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
 
-    state_count = run(env=env, agent=agent, render=render, horizon = int(1e5), desc = desc, dim= dim, label=label, code = code, tofl = tofl, timesteps = int(3*dim))
-    store(filename = f'experiments/tabular/FrozenLake/{label}/seed_{seed}', state_count = state_count, agent_params=agent_params)
+    state_count = run(env=env, 
+                      domain = domain, 
+                      agent=agent, 
+                      render=render, 
+                      horizon = int(1e5), 
+                      desc = desc, 
+                      dim= dim, 
+                      label=label, 
+                      code = code, 
+                      tofl = tofl, 
+                      timesteps = int(3*dim))
+    store(filename = f'experiments/tabular/{domain}/{label}/seed_{seed}', state_count = state_count, agent_params=agent_params)
     
 def store(filename, state_count, agent_params):
     if not os.path.exists(filename+'/stored_data'):
@@ -117,7 +127,7 @@ def store(filename, state_count, agent_params):
             f.write(f"{key}: {value}\n")
 
 
-def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0):
+def run(env:gym.Env, agent:Q_Learning_Agent, code, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0):
     initial_exploration_rate = 1 
     epsilon = np.linspace(initial_exploration_rate, 0.05, int(0.6 * horizon))
     percentage = 1
@@ -130,7 +140,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent, code, horizon = 1_000, timesteps = 
         
         #after some timesteps perform the evaluation
         if episode % int(round(100/percentage)) == 0:
-            evaluate(agent, timesteps, evaluation_episodes = 3, label = label, episode = episode, iterations = int(0.2*horizon), desc = desc, normalizer=normalizer)
+            evaluate(agent, timesteps, domain = domain, evaluation_episodes = 3, label = label, episode = episode, iterations = int(0.2*horizon), desc = desc, normalizer=normalizer)
             wandb.log({"std error during training": mean_std})
             mean_std = 0
         agent.set_eps(epsilon[episode if episode < epsilon.size else -1])
@@ -201,12 +211,12 @@ if  __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--im', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
     #tofl means type of frozen lake
-    parser.add_argument('--tofl', type=int, default=10, help='Would you like to use the standrad RND')
+    parser.add_argument('--tofl', type=int, default=0, help='Would you like to use the standrad RND')
     args = parser.parse_args()
 
     # Access hyperparameters in your script

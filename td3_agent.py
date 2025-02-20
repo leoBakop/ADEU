@@ -633,7 +633,31 @@ class UCB_TD3_Agent:
             raise ValueError        
         return max_action
     
+
+class TD3_Ensemble_ADEU(UCB_TD3_Agent):
+    def __init__(self, N, lambda_parameter, agent_params, beta=0.99):
+        super().__init__(N, lambda_parameter, agent_params, beta)
     
+
+    def get_action(self, state):
+        action = super().get_clear_action(state)
+        action = torch.from_numpy(action, ).to(self.device).view(1,-1).float()
+        state = state.to(self.device).unsqueeze(0)    
+        with torch.no_grad():
+            q_values = np.array([np.min(a.critic(state, action)[0].detach().cpu().numpy()) for a in self.agents])
+
+        variance = sigmoid(self.lambda_value*np.std(q_values)) * self.agents[0].policy_noise
+        self.variance = variance #self.variance serves as a buffer        
+        
+        if variance < 1e-2: return action
+        action = action.detach().cpu()
+        dist = MultivariateNormal(action, variance * torch.eye(action.shape[1],action.shape[1]))
+        action = dist.sample().squeeze(0)
+        return action.numpy()
+
+
+
+
     
 def sigmoid(x):
     return 1/(1 + np.exp(-x))

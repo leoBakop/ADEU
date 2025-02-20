@@ -5,9 +5,9 @@ from gym.wrappers import RecordVideo
 from q_learning_agent import Q_Learning_Agent
 from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 
-def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, save_experience = False, wandb_log = True):
+def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, domain, save_experience = False,  wandb_log = True):
     dim = len(desc)
-    env = make_evaluation_env(iterations, episode, label, desc)
+    env = make_evaluation_env(iterations, episode, label, desc, domain)
     env.reset(seed = np.random.randint(low = 1, high = 9e+10))
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
@@ -59,12 +59,12 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
 
 
 
-def make_evaluation_env(iterations, episode, label, desc, **kwargs):
-    eval_env = gym.make('FrozenLake-v1',desc = desc, is_slippery = False, render_mode = None, **kwargs)
+def make_evaluation_env(iterations, episode, label, desc, domain, **kwargs):
+    eval_env = gym.make('FrozenLake-v1',desc = desc, is_slippery = False, render_mode = 'rgb_array', **kwargs)
     
-    """ if episode % iterations != 0: return eval_env 
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/tabular/{label}/FrozenLake-v1/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'FrozenLake-v1_true_epside_{episode}')
-    """
+    if episode % iterations != 0: return eval_env 
+    eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/tabular/{label}/{domain}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'true_epside_{episode}')
+   
     
     return eval_env
 
