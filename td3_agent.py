@@ -127,7 +127,7 @@ class TD3(object):
         self.use_rnd = use_rnd
         self.use_noisy_nets = use_noisy_nets
         self.variance = self.policy_noise
-        
+        self.eps = eps
         self.mod_rnd = mod_rnd
         if self.mod_rnd:
             self.rnd_low_threshold = 0.15 #it was 0.2
@@ -154,7 +154,7 @@ class TD3(object):
             
             self.rnd_optimizer = torch.optim.SGD(self.rnd_predictor.parameters(), lr=lr)
             self.rnd_loss = nn.MSELoss()
-            self.eps = eps
+            
             self.rollout_episode = False
             self.obss = RunningMeanStd(shape= (1, state_dim)) #it was inside the following if
             if self.use_rnd:
@@ -579,7 +579,7 @@ class UCB_TD3_Agent:
     def get_action(self, state):
         modified = False
         action_dim = self.agents[0].action_dim
-        actions = torch.Tensor([a.get_action(state) for a in self.agents])
+        actions = torch.from_numpy(np.array([a.get_action(state) for a in self.agents]))
         state = state.to(self.device).unsqueeze(0)        
         def obj(action):
             action = torch.from_numpy(np.array([action], dtype=np.float32)).to(self.device)
@@ -637,9 +637,19 @@ class UCB_TD3_Agent:
 class TD3_Ensemble_ADEU(UCB_TD3_Agent):
     def __init__(self, N, lambda_parameter, agent_params, beta=0.99):
         super().__init__(N, lambda_parameter, agent_params, beta)
-    
+        self.rollout_episode = False
+        self.eps = self.agents[0].eps
+        self.max_action = agent_params['max_action']
+        self.policy_noise = agent_params['policy_noise']
+        self.action_dim = agent_params['action_dim']
 
     def get_action(self, state):
+
+        if self.rollout_episode:
+            clear_action = self.get_clear_action(state)
+            return (clear_action + np.random.normal(0, self.max_action * self.policy_noise, size=self.action_dim)).clip(-self.max_action, self.max_action)
+
+
         action = super().get_clear_action(state)
         action = torch.from_numpy(action, ).to(self.device).view(1,-1).float()
         state = state.to(self.device).unsqueeze(0)    

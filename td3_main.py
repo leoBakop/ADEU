@@ -102,7 +102,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     "mod_rnd":mod_rnd,
     "per":per,
     "adaptive_exploration": adaptive_exploration,
-    "eps":0.3, #it was 0.0005
+    "eps":0.3 if not adeu_ensemble else 0.0, #it was 0.0005
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets,
     "uncertainty_const" : uncertainty_const
@@ -135,6 +135,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
             path = filename, 
             mod_rnd = mod_rnd,
             debug = debug,
+            adeu_ensemble = adeu_ensemble
             )
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
@@ -148,7 +149,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     return mean_evaluation_rewards
 
 
-def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd, debug,  **kwargs):
+def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd, debug, adeu_ensemble,  **kwargs):
     total_timesteps = 0
     max_timesteps_reached = False
     mean_reward = np.zeros(horizon)
@@ -207,7 +208,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
         if agent.rollout_episode: 
             agent.rollout_episode = False
         #check for rollout episode
-        if adaptive_exploration and np.random.rand() < agent.eps: 
+        if (adaptive_exploration or adeu_ensemble) and (np.random.rand() < agent.eps): 
             agent.rollout_episode = True
         
         for t in range(timesteps):
@@ -337,7 +338,13 @@ if __name__ == '__main__':
         'Humanoid-v5':80e6,
         'Walker2d-v5':10e6,
         'HalfCheetah-v5':10e6,
-        'Pusher-v5':10e6
+        'Pusher-v5':5e6,
+        'Reacher-v5':5e6,
+        'InvertedDoublePendulum-v5':30e6,
+        'InvertedPendulum-v5':10e6,
+        'Ant-v5':5e6,
+        'HumanoidStandup-v5':5e6,
+        'Swimmer-v5':5e6
     }
 
     horizon = int(horizon[domain] / timesteps) 
