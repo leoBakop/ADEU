@@ -213,6 +213,11 @@ class TD3(object):
         #variance = max(variance, self.eps)
         if variance < 1e-2: return clear_action
         
+        #these lines were added for FrankaKitchen.
+        #They aim to change the variance from float64 to float 32
+        if variance.dtype == torch.float64:
+            variance = variance.float()
+
         dist = MultivariateNormal(torch.from_numpy(clear_action), variance * torch.eye(clear_action.shape[0],clear_action.shape[0]))
         action = dist.sample()
         return action.detach().cpu().numpy()
@@ -364,7 +369,13 @@ class TD3(object):
         
         return
 
-
+    def set_uncertainty(self, uncertainty):
+        if not self.use_rnd: return
+        import time
+        self.rnd_target.set_uncertainty(uncertainty)
+        self.rnd_predictor.set_uncertainty(uncertainty)
+        print(f'New value for uncertainty : {uncertainty}')
+        time.sleep(2)
 
     def train_basic_per(self, experiences):
         self.total_it += 1

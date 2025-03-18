@@ -18,7 +18,16 @@ import random
 from gymnasium.wrappers import TransformObservation
 from network import UNCERTAINTY
 from td3_evaluate import evaluate
+from utils import make_observation_franz_kitchen
 
+
+#defining some global variables
+GYMNASIUM_ROBOTIC_DOMAINS =[
+    'AntMaze_UMazeDense-v5',
+    'PointMaze_LargeDense-v3',
+    'FetchSlideDense-v3',
+    'FrankaKitchen-v1'
+] 
 
 
 def set_seed(seed):
@@ -43,9 +52,7 @@ def set_seed(seed):
 def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per,include_pos,adeu_ensemble, **kwargs):
     set_seed(seed)
     adaptive_exploration = ade
-    #kwargs={
-    #    'max_episode_steps':timesteps,
-    #}
+    maze = 'maze' in domain.lower()
 
     #just for printing
     arguments = {
@@ -68,6 +75,35 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     if include_pos:
         kwargs['exclude_current_positions_from_observation'] = not include_pos
     
+    
+    if domain in GYMNASIUM_ROBOTIC_DOMAINS:
+        import gymnasium_robotics
+        kwargs['max_episode_steps'] = timesteps
+        gym.register_envs(gymnasium_robotics)
+        if maze:
+            LARGE_MAZE = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+                [1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+                [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+                [1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1],
+                [1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
+                [1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1],
+                [1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+            kwargs['maze_map'] = LARGE_MAZE
+
+        if domain=='FrankaKitchen-v1':
+            kwargs['tasks_to_complete']=[   'bottom burner',
+                                            'top burner',
+                                            'light switch',
+                                            'slide cabinet',
+                                            'hinge cabinet',
+                                            'microwave',
+                                            'kettle'
+                                        ]
+
+
+
     env = gym.make(domain, **kwargs)
 
 
@@ -75,7 +111,9 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     seed = seed
     timesteps = timesteps
     observation, info = env.reset(seed=seed)
-    if isinstance(observation, dict):
+    if domain ==   'FrankaKitchen-v1':
+        observation = make_observation_franz_kitchen(observation=observation)
+    elif isinstance(observation, dict):
             observation = np.concatenate([arr for arr in observation.values()])
 
 
@@ -117,13 +155,15 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
         agent = TD3_Ensemble_ADEU(agent_params = agent_params, N = N, lambda_parameter=1, beta = 1)
     elif not ucb:
         agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
+        if use_rnd: agent.set_uncertainty(1)
     else:
         N = 5
         agent_params['train_frequency']*=N
         agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=10, beta = 1)
     wandb_session(domain, include_pos = include_pos, name=name, lr = lr, uc = uncertainty_const, code=code_creation(use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per, adeu_ensemble=adeu_ensemble), debug = debug)
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, total_timesteps = \
-        run(**kwargs, 
+        run(kwargs=kwargs,
+            maze = maze, 
             domain = domain, 
             env=env, 
             horizon = horizon, 
@@ -149,7 +189,22 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     return mean_evaluation_rewards
 
 
-def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd, debug, adeu_ensemble,  **kwargs):
+def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd, debug, adeu_ensemble, maze,  kwargs):
+
+    
+    options = None
+    if maze:
+        #we know the map so there is no neeed to select random points
+        #we will select the most difficult
+        goal_cell = np.array([7,9])
+        reset_cell = np.array([1,1])
+        
+
+        options =   {
+                        'goal_cell':goal_cell,
+                        'reset_cell':reset_cell
+                     }
+        
     total_timesteps = 0
     max_timesteps_reached = False
     mean_reward = np.zeros(horizon)
@@ -190,7 +245,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
                 agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = max_var)
                 mean_var_per_episode = 0
                
-            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(**kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label, debug = debug)
+            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(kwargs=kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label, debug = debug, options = options)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
@@ -200,8 +255,13 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
             print('1.2 timesteps reached')        
             agent.modify_train_frequency(250)
         
-        current_observation, info = env.reset() #seed is not used as the documentation indicates
-        if isinstance(current_observation, dict):
+        if maze:
+            current_observation, info = env.reset(options = options) #seed is not used as the documentation indicates
+        else:
+            current_observation, info = env.reset() #seed is not used as the documentation indicates
+        if domain == 'FrankaKitchen-v1':
+            current_observation = make_observation_franz_kitchen(current_observation)
+        elif isinstance(current_observation, dict):
             current_observation = np.concatenate([arr for arr in current_observation.values()])
         current_observation = torch.FloatTensor(current_observation)
         total_reward = 0
@@ -216,7 +276,9 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
             action = agent.get_action(current_observation)# User-defined policy function
             var[t] = agent.get_variance()
             observation, reward, done, truncated, info = env.step(action)
-            if isinstance(observation, dict):
+            if domain == 'FrankaKitchen-v1':
+                observation = make_observation_franz_kitchen(observation)
+            elif isinstance(observation, dict):
                 observation = np.concatenate([arr for arr in observation.values()])
             tmp_network_loss, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done or truncated, timestep=t) #push that in memory
             #just to have a good plotting
@@ -228,7 +290,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
             total_reward+=reward
             rewards[episode*timesteps + t] = reward
             #wandb.log({domain+"rewards": reward})
-            if done or truncated:
+            if done or truncated or (t==timesteps-1):
                 mean_reward[episode] = total_reward/(t+1)
                 summed_reward+=total_reward
                 break
@@ -312,8 +374,8 @@ if __name__ == '__main__':
     parser.add_argument('--adeu_ensemble', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
-    parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
-    parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
+    parser.add_argument('--dom', type=str, default='FrankaKitchen-v1', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--steps', type=int, default=280, help='what are the maximum timesteps per episode')
    
     args = parser.parse_args()
 
@@ -330,13 +392,12 @@ if __name__ == '__main__':
     ucb = args.UCB
     adeu_ensemble = args.adeu_ensemble
     include_pos = args.include_pos
-    #horizon: hopper 10M, 
-    # humanoid 80M
-    #walker 10M
+
     horizon = {
         'Hopper-v5':10e6,
         'Humanoid-v5':80e6,
         'Walker2d-v5':10e6,
+        'Walker2d':10e6,
         'HalfCheetah-v5':10e6,
         'Pusher-v5':5e6,
         'Reacher-v5':5e6,
@@ -344,12 +405,19 @@ if __name__ == '__main__':
         'InvertedPendulum-v5':10e6,
         'Ant-v5':5e6,
         'HumanoidStandup-v5':5e6,
-        'Swimmer-v5':5e6
+        'Swimmer-v5':5e6,
+        ################
+        #for gymnasium robotics
+        'AntMaze_UMazeDense-v5':5e6,
+        'PointMaze_LargeDense-v3':2e6,
+        'FetchSlideDense-v3':5e6,
+        'FrankaKitchen-v1':5e6,
+        ######################
+        'MountainCarContinuous-v0':5e6
     }
 
     horizon = int(horizon[domain] / timesteps) 
-    if timesteps <= 200:
-        horizon = int(horizon/10)
+    
 
         
 

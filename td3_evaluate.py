@@ -4,13 +4,12 @@ from td3_agent import TD3
 import gymnasium as gym
 import wandb
 from gym.wrappers import RecordVideo
+from utils import make_observation_franz_kitchen
 
 
+def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, iterations, debug,kwargs,options = None ):
+    env = make_evaluation_env(kwargs = kwargs, dom=domain, iterations=iterations, episode = episode, label = label, debug = debug)
 
-
-
-def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, iterations, debug,**kwargs):
-    env = make_evaluation_env(dom=domain, iterations=iterations, episode = episode, label = label, debug = debug, **kwargs)
     env.reset(seed = np.random.randint(low = 1, high = 9e+10))
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
@@ -18,23 +17,31 @@ def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, 
 
     average_rewards = np.zeros(timesteps)
     for episode in range(evaluation_episodes):
-        current_observation, info = env.reset()
-        if isinstance(current_observation, dict):
+        if options is not None:
+            current_observation, info = env.reset(options = options)
+        else:
+            current_observation, info = env.reset()
+        
+        if domain == 'FrankaKitchen-v1':
+            current_observation = make_observation_franz_kitchen(current_observation)
+        elif isinstance(current_observation, dict):
             current_observation = np.concatenate([arr for arr in current_observation.values()])
 
         current_observation = torch.FloatTensor(current_observation)
         total_reward = 0
         for t in range(timesteps):
             action = agent.get_clear_action(current_observation)# User-defined policy function
-            observation, reward, done, truncated, info = env.step(action) 
-            if isinstance(observation, dict):
+            observation, reward, done, truncated, info = env.step(action)
+            if domain == 'FrankaKitchen-v1':
+                observation = make_observation_franz_kitchen(observation) 
+            elif isinstance(observation, dict):
                 observation = np.concatenate([arr for arr in observation.values()])
             current_observation = torch.FloatTensor(observation)
             total_reward += reward
             average_rewards[t] += reward/evaluation_episodes
             #if episode == 0:
                 #wandb.log({domain+'evaluation_rewards':reward})
-            if done or truncated:
+            if done or truncated or (t==timesteps -1):
                 mean_timesteps[episode] = t+1
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
@@ -43,7 +50,7 @@ def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, 
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
 
-def make_evaluation_env(dom, iterations, episode, label, debug, **kwargs):
+def make_evaluation_env(dom, iterations, episode, label, debug, kwargs):
     if debug:
         return gym.make(dom, render_mode = 'none', **kwargs)
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)

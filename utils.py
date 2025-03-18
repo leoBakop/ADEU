@@ -151,3 +151,11 @@ def append_zero_to_each_tensor(tensor_list):
         ret_val.append(torch.cat((tensor_list[i].detach().cpu(), zero_tensor)))
 
     return ret_val
+
+
+def make_observation_franz_kitchen(observation):
+    new_obs = observation['observation']
+    achieved_goal = np.concatenate([ag for ag in observation['achieved_goal'].values()])
+    desired_goal = np.concatenate([ag for ag in observation['desired_goal'].values()])
+    retval = np.concatenate([new_obs,achieved_goal,desired_goal])
+    return retval
