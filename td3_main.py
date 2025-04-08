@@ -63,6 +63,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
         'rnd':use_rnd,
         'noisy_nets':noisy_nets,
         'Baseline': (not ade) and (not use_rnd) and (not noisy_nets) and (not comb)
+
     }
     
     
@@ -395,6 +396,7 @@ if __name__ == '__main__':
 
     horizon = {
         'Hopper-v5':10e6,
+        'Hopper':10e+6,
         'Humanoid-v5':80e6,
         'Walker2d-v5':10e6,
         'Walker2d':10e6,

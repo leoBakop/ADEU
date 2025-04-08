@@ -53,7 +53,11 @@ def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, 
 def make_evaluation_env(dom, iterations, episode, label, debug, kwargs):
     if debug:
         return gym.make(dom, render_mode = 'none', **kwargs)
+    
     eval_env = gym.make(dom, render_mode = 'rgb_array', **kwargs)
+    #having some problems with the rendering
+    #from now on I will not generate videos
+    return eval_env
     if episode % iterations != 0: return eval_env 
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/TD3/{dom}/{label}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
