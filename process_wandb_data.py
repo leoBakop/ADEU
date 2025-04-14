@@ -16,7 +16,7 @@ def mean_values(df, codes):
     extended_codes = list([c+' - cumm_evaluation_reward' for c in codes])
     for i,c in enumerate(extended_codes):
         rewards = df[c]
-        rewards = exponential_smoothing(y_values=rewards, x_values=df['Step'], smoothing_param=0.99)
+        rewards = exponential_smoothing(y_values=rewards, x_values=df['Step'], smoothing_param=0.7)
         rewards = np.array(rewards)
         mean_reward = round(np.mean(rewards), 0)
         max_reward = round(np.max(rewards), 0)
@@ -25,12 +25,34 @@ def mean_values(df, codes):
 
 
 def print_results(results):
-    print('Algorithm|  Mean Reward|   MAX reward ')
+    best_results = find_best_performance(results, percentage=0.9)
+    print('Algorithm |  Mean Reward |  MAX reward ')
     for key, value in results.items():
-        print(f'{key}| {value[0]} | {value[1]}' )
+        if key in best_results.keys() :
+            print(f'\033[1;31m{key}| {value[0]} | {value[1]}\033[0m')
+        else:
+            print(f'{key}| {value[0]} | {value[1]}')
 
 
+def find_best_performance(results, percentage = 0.9):
+    best_key = None
+    best_value = -np.inf
+    retval = {}
+    #find the best value
+    for key, value in results.items():
+        if value[0] > best_value:
+            best_value = value[0]
+            best_key = key
+    retval[best_key] = best_value
+    #find th values that are at least percentage persent as 
+    #good as the best
+    limit = percentage*best_value
+    for key, value in results.items():
+        if value[0] > limit and key !=best_key:
+            retval[key] = value[0]
 
+
+    return retval
 def exponential_smoothing(y_values, x_values, smoothing_param=0, viewport_scale=1):
     """
     Apply exponential smoothing to a series of y-values with optional x-value spacing.
@@ -67,12 +89,15 @@ def exponential_smoothing(y_values, x_values, smoothing_param=0, viewport_scale=
     
     return smoothed_values
 
+    
+
 if __name__=='__main__':
     file = 'wandb_results/swimmer_cumulative_rewards.csv'
-    898
     # Load the CSV file into a DataFrame
     df = pd.read_csv(file)
-    codes = ['code: 0', 'code: 21', 'code: 2', 'code: 3', 'code: 5', 'code: 6' ]
+    codes = ['code: 0', 'code: 2', 'code: 3', 'code: 5',  'code: 21' ,'code: 6']
 
     values = mean_values(df, codes)
     print_results(results = values)
+    print('______________________________')
+
