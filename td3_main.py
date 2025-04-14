@@ -18,7 +18,8 @@ from gymnasium.wrappers import TransformObservation
 from network import UNCERTAINTY
 from td3_evaluate import evaluate
 from utils import make_observation_franz_kitchen
-
+import time
+KEEP_TRAJECTORY = True
 
 #defining some global variables
 GYMNASIUM_ROBOTIC_DOMAINS =[
@@ -50,6 +51,12 @@ def set_seed(seed):
 
 def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per,include_pos,adeu_ensemble, **kwargs):
     set_seed(seed)
+    if KEEP_TRAJECTORY:
+        print('In this ran, some statistics will be kept')
+        print('If you would like to change it, please set KEEP TRAJECTORY to false')
+        print('###################################################################')
+        time.sleep(10)
+        
     adaptive_exploration = ade
     maze = 'maze' in domain.lower()
 
@@ -70,7 +77,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     label = label+" per" if per else label
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
-    debug = True
+    debug = False
     
     if include_pos:
         kwargs['exclude_current_positions_from_observation'] = not include_pos
@@ -175,7 +182,8 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
             path = filename, 
             mod_rnd = mod_rnd,
             debug = debug,
-            adeu_ensemble = adeu_ensemble
+            adeu_ensemble = adeu_ensemble,
+            seed=seed
             )
     agent_params['horizon']=horizon
     agent_params['timesteps'] = timesteps
@@ -189,7 +197,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     return mean_evaluation_rewards
 
 
-def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd, debug, adeu_ensemble, maze,  kwargs):
+def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd ,label, path, mod_rnd, debug, adeu_ensemble, maze,  kwargs, seed):
 
     
     options = None
@@ -244,8 +252,8 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
                 max_var = var_per_episode[episode -1 if episode > 0 else 0] if t >timesteps/20 else 100
                 agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = max_var)
                 mean_var_per_episode = 0
-               
-            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(kwargs=kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label, debug = debug, options = options)
+            keep_trajectory = ( seed == 0 and adaptive_exploration and KEEP_TRAJECTORY)
+            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(kwargs=kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label, debug = debug, options = options, keep_trajectories=keep_trajectory)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
@@ -365,16 +373,16 @@ def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--ade', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--noisy_nets', action='store_true', default=False)
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
-    parser.add_argument('--mod_rnd', action='store_true', default=False, help='Heuristically modify the Uncertainty')
+    parser.add_argument('--mod_rnd', action='store_true', default=True, help='Heuristically modify the Uncertainty')
     parser.add_argument('--UCB', action='store_true', default=False, help='Create a UCB agent')
     parser.add_argument('--adeu_ensemble', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
-    parser.add_argument('--dom', type=str, default='FrankaKitchen-v1', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--dom', type=str, default='InvertedPendulum-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=280, help='what are the maximum timesteps per episode')
    
     args = parser.parse_args()

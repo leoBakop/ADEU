@@ -5,16 +5,23 @@ import gymnasium as gym
 import wandb
 from gym.wrappers import RecordVideo
 from utils import make_observation_franz_kitchen
+import os
 
 
-def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, iterations, debug,kwargs,options = None ):
+def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, iterations, debug,kwargs,options = None, keep_trajectories = False ):
     env = make_evaluation_env(kwargs = kwargs, dom=domain, iterations=iterations, episode = episode, label = label, debug = debug)
 
     env.reset(seed = np.random.randint(low = 1, high = 9e+10))
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
     mean_sum_reward = np.zeros(evaluation_episodes)
-
+    #these variables will store the original policy, the actions proovided by the exploration strategy
+    #and the variance of the agent.
+    if keep_trajectories:
+        path = f'./experiments/TD3/{domain}/adeu_figure/episode{episode}'
+        policy = []
+        explortaion_strategy = []
+        variance = []
     average_rewards = np.zeros(timesteps)
     for episode in range(evaluation_episodes):
         if options is not None:
@@ -32,6 +39,12 @@ def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, 
         for t in range(timesteps):
             action = agent.get_clear_action(current_observation)# User-defined policy function
             observation, reward, done, truncated, info = env.step(action)
+
+            if keep_trajectories and episode == 0:
+                policy.append(action)
+                explortaion_strategy.append(agent.get_action(current_observation))
+                variance.append(agent.get_variance())
+
             if domain == 'FrankaKitchen-v1':
                 observation = make_observation_franz_kitchen(observation) 
             elif isinstance(observation, dict):
@@ -46,6 +59,7 @@ def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, 
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
                 break
+    store_trajectory(path=path, policy = np.array(policy), exploration_strategy=np.array(explortaion_strategy), variance=np.array(variance))
     wandb.log({domain+"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)
@@ -62,3 +76,12 @@ def make_evaluation_env(dom, iterations, episode, label, debug, kwargs):
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/TD3/{dom}/{label}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'{dom}_true_epside_{episode}')
     return eval_env
 
+
+
+def store_trajectory(path, policy, exploration_strategy, variance):
+    if not os.path.exists(path):
+        os.makedirs(path) 
+    
+    np.save(path+'/policy.npy', policy)
+    np.save(path+'/exploration_strategy.npy', exploration_strategy)
+    np.save(path+'/variance.npy', variance)
