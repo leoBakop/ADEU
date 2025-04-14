@@ -2,10 +2,14 @@ import numpy as np
 import gymnasium as gym
 import wandb
 from gym.wrappers import RecordVideo
-from q_learning_agent import Q_Learning_Agent
+from q_learning_agent import Q_Learning_Agent, ADEU_Q_Learning
 from gymnasium.envs.toy_text.frozen_lake import generate_random_map
+import os
 
-def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, domain, save_experience = False,  wandb_log = True):
+
+def evaluate(agent:Q_Learning_Agent | ADEU_Q_Learning, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, domain, save_experience = False,  wandb_log = True, keep_trajectories = False):
+    
+    
     dim = len(desc)
     env = make_evaluation_env(iterations, episode, label, desc, domain)
     env.reset(seed = np.random.randint(low = 1, high = 9e+10))
@@ -14,6 +18,13 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
     mean_sum_reward = np.zeros(evaluation_episodes)
     experience = []
     average_rewards = np.zeros(timesteps)
+    #these variables will store the original policy, the actions proovided by the exploration strategy
+    #and the variance of the agent.
+    if keep_trajectories:
+        path = f'./experiments/tabular/{domain}/adeu_figure/episode{episode}'
+        policy = []
+        explortaion_strategy = []
+        variance = []
     for episode in range(evaluation_episodes):
         current_observation, info = env.reset()
         total_reward = 0
@@ -21,7 +32,10 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
             action = agent.get_clear_action(current_observation)# User-defined policy function
             new_observation, reward, done, truncated, info = env.step(action) 
             row, col = reverse_hash(new_observation,dim)
-            
+            if keep_trajectories and episode == 0:
+                policy.append(action)
+                explortaion_strategy.append(agent.get_action(current_observation))
+                variance.append(agent.get_exploration_rate())
             if desc[row][col] == 'H':
                 reward = 0
                 done = True
@@ -51,6 +65,7 @@ def evaluate(agent:Q_Learning_Agent, timesteps, evaluation_episodes, label, epis
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
                 break
+    store_trajectory(path=path, policy = np.array(policy), exploration_strategy=np.array(explortaion_strategy), variance=np.array(variance))
     if wandb_log:
         wandb.log({"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
     env.close()
@@ -74,3 +89,11 @@ def reverse_hash(hash_code, ncols):
     col = hash_code % ncols
     return row, col
     
+
+def store_trajectory(path, policy, exploration_strategy, variance):
+    if not os.path.exists(path):
+        os.makedirs(path) 
+    
+    np.save(path+'/policy.npy', policy)
+    np.save(path+'/exploration_strategy.npy', exploration_strategy)
+    np.save(path+'/variance.npy', variance)

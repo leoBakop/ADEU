@@ -10,7 +10,6 @@ import os
 from copy import copy
 import gymnasium as gym
 import wandb
-import plotly.graph_objects as go
 import argparse
 from gym.wrappers import RecordVideo
 from tqdm import tqdm
@@ -71,7 +70,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     label = label+" per" if per else label
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
-    debug = False
+    debug = True
     
     if include_pos:
         kwargs['exclude_current_positions_from_observation'] = not include_pos

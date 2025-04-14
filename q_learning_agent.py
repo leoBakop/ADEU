@@ -140,7 +140,8 @@ class ADEU_Q_Learning(Q_Learning_Agent):
 
         #getting all the q values for the corresponding state
         qs = self.q_table[obs]
-        exploration_rate =  sigmoid( self.n[obs]) * qs
+        self.exploration_rate = sigmoid( self.n[obs])
+        exploration_rate =  self.exploration_rate * qs
         exploration_rate = np.clip(exploration_rate, 0 , 10)
         probs = np.exp(exploration_rate)
         probs/= np.sum(probs)
@@ -159,7 +160,10 @@ class ADEU_Q_Learning(Q_Learning_Agent):
         self.n[new_obs] += self.beta
         return super().step(tuple)
     
-    
+    def get_exploration_rate(self):
+         expl = 1/self.exploration_rate
+         expl /= 40.033
+         return np.round(expl, decimals=3)     
 
 def sigmoid(x):
     return 1/(1 + np.exp(-x)) -0.5
