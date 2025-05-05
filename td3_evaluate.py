@@ -59,7 +59,8 @@ def evaluate(agent:TD3, timesteps, evaluation_episodes, domain, label, episode, 
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
                 break
-    store_trajectory(path=path, policy = np.array(policy), exploration_strategy=np.array(explortaion_strategy), variance=np.array(variance))
+    if keep_trajectories:
+        store_trajectory(path=path, policy = np.array(policy), exploration_strategy=np.array(explortaion_strategy), variance=np.array(variance))
     wandb.log({domain+"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
     env.close()
     return np.mean(mean_reward), average_rewards, np.mean(mean_timesteps), np.mean(mean_sum_reward)

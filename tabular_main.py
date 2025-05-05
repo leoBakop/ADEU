@@ -240,7 +240,7 @@ if  __name__ == '__main__':
     
     label = [a for a in arguments.keys() if arguments[a]][0]
     
-    seed = 10
+    seed = 1
     code = code_creation(adaptive_exploration=use_ade, use_rnd = use_im, ucb=use_ucb )
     for s in range(seed):
         main(seed = s, code = code, label = label, heads = heads, type_of_map=tofl)
