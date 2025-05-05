@@ -1,105 +1,236 @@
-""" This script tries to simulate the whole backround knowledge in a tabular environment.
-In more detail, it generates some previous knowledge (i.e a q-table) using simple q-learning. 
-Then, some rollouts are performed using the q-learning agent, to create some training tuples (i.e. dataset)
-for some speciffic states.
-The tested agents, are trained offline in that dataset and afterwards, the trained as in tabular_main.py"""
-
 import gymnasium as gym
 import numpy as np
-import random
 from q_learning_agent import Q_Learning_Agent, IR_Q_Learning_Agent, UCB_Q_Learning, ADEU_Q_Learning
 from tabular_evaluate import evaluate
-import wandb
 from tqdm import tqdm
-from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 import argparse
-import sys
+import wandb
 import os
 import pickle
+from tabular_main import code_creation, set_seed, wandb_session, reverse_hash
+import random
 
-def set_seed(seed):
-    print('setting seeds')
-    random.seed(seed)
-    np.random.seed(seed)
-    
-def wandb_session(domain , seed = 0, name = None, code = 0, debug = False, beta = 0, heads = 0):
-    # start a new wandb run to track this script
-    project = f"Mod RND| Tabular-Background knowledge, Adaptive Exploration {domain}"
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project=project,
-        name = name,
-        # track hyperparameters and run metadata
-        config={
-        "code":code,
-        'beta':beta,
-        'heads':heads 
-        }
-    )
-    
-    
-def generate_agent(map, env:gym.Env, agent:Q_Learning_Agent, timesteps, horizon, dim):
-    epsilon = np.linspace(1, 0.1, int(0.5 * horizon))
+
+def generate_custom_map(dim):
+    desc = []
+    initial_line = "SF" + "".join(["H" for _ in range(dim - 2)])
+    desc.append(initial_line)
+    #constructing the vertical path
+    for _ in range(3, dim): 
+        line_start = 'H' if np.random.rand() <0.9 else 'F' #create a hole at the left of the path with 90% probability
+        desc.append(line_start + "F" + "".join(["H" if np.random.rand() <0.8 else 'F'  for _ in range(dim - 2)]))   
+    line_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))     
+    #cosntructing the horizontal path
+    desc.append(line_before)
+    final_line = "".join(["H" for _ in range(dim - 1)])+"G"
+    desc.append(final_line)
+    return desc
+
+
+def load_background_knowledge(path):
+    with open(path, "rb") as file:
+        loaded_experience = pickle.load(file)
+    return loaded_experience
+
+def filter_states(background_knowledge, samples):
+    """ this method returns the tuples in which an agent should be trained on.
+        since the background knowledge contains only the correcttrajectory---and some initial training data
+        I will just sample some random.     
+    """
+    sampled = random.sample(background_knowledge, k=samples)
+    return sampled
+
+def pretraining(agent, background_knowledge, code_of_the_agent, iterations = 10):
+    """ 
+        this method pretrains the agent on the background knowledge.
+        this process is repeated multiple times
+    """
+
+    for i in tqdm(range(iterations)):
+        random.shuffle(background_knowledge)
+        for current_observation, action, reward, new_observation, done in background_knowledge:
+            if code_of_the_agent == 5: #in the case of a ucb agent
+                mask = np.random.binomial(1, agent.p, agent.num_of_agents)
+                agent.step([current_observation, action, reward, new_observation, done, mask])
+            else:
+                agent.step([current_observation, action, reward, new_observation, done])
+    print('the agent was pretrained succesfully')
+    return agent
+
+def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0):
+    conflicts = 0
+    initial_exploration_rate = 1 
+    epsilon = np.linspace(initial_exploration_rate, 0.05, int(0.6 * horizon))
+    percentage = 1
     normalizer = dim*(dim+1)/2
-    render = False
+    mean_std = 0
     states_count = np.zeros([dim,dim])
     for episode in tqdm(range(horizon)):
+        if code == 1 and np.random.rand()<agent.rollout_frequency:
+            agent.rollout = True
+        
         #after some timesteps perform the evaluation
+        if episode % int(round(100/percentage)) == 0:
+            evaluate(agent, 
+                    timesteps, 
+                    domain = domain, 
+                    evaluation_episodes = 3, 
+                    label = label, 
+                    episode = episode, 
+                    iterations = int(0.2*horizon), 
+                    desc = desc, 
+                    normalizer=normalizer, 
+                    keep_trajectories=False,
+                    save_experience=False)
+
+            wandb.log({"std error during training": mean_std})
+            wandb.log({"mean conflicts per episode": conflicts/(100/percentage)})
+            conflicts = 0
+            mean_std = 0
         agent.set_eps(epsilon[episode if episode < epsilon.size else -1])
         obs, _ = env.reset()
+        row, col = reverse_hash(obs,dim)
+        states_count[row, col]+=1
         for t in range(timesteps):
-            states_count[reverse_hash(obs,dim)]+=1
+            
             if render: env.render()
             
-            action = agent.get_action(obs)
+            if code == 5: 
+                action, std = agent.get_action(obs)
+                mean_std += std*percentage/(timesteps*100)
+            else: action = agent.get_action(obs)
             
+            if tofl != 0 and action == 3:
+                action = np.random.choice(np.arange(2), size = 1)[0]
             new_obs, reward, done, truncated, info = env.step(action)
-            if done :
-                reward = + 100000 if ( reward == 1) else -10
+
+            row, col = reverse_hash(new_obs,dim)
+            states_count[row, col]+=1
+            if desc[row][col] == 'H':
+                reward = -10
+                done = True
+            elif desc[row][col] == 'G':
+                print ('target was founded')
+                reward = 100_000
+                done = True
+            elif desc[row][col] == 'S':
+                reward = 0
+                done = False
+                truncated = False
             else:
-                reward = new_obs/normalizer
-               
-            agent.step([obs, action, reward, new_obs, done or truncated])
+                reward = dim*new_obs/normalizer
+                done = False
+                truncated = False
+                #in our case this migh also be a forbidden array.
+                #so we have to check it out
+                if col != 1 and row < dim-2:
+                    print('check it out')
+                    conflicts+= 1
+                    
+            if code == 5:
+                mask = np.random.binomial(1, agent.p, agent.num_of_agents)
+                agent.step([obs, action, reward, new_obs, done or truncated, mask])
+            else:
+                agent.step([obs, action, reward, new_obs, done or truncated])
+            
             obs = new_obs
             
-            if done or truncated:
+            if (done):
                 break
+        if code == 1: 
+            agent.rollout = False
     env.close()
-    return states_count, agent, normalizer
-
-def reverse_hash(hash_code, ncols):
-    row = hash_code // ncols
-    col = hash_code % ncols
-    return row, col
+    wandb.finish()
+    
+    return states_count
 
 
-def rollout(agent:Q_Learning_Agent, normalizer, timesteps, horizon, map):
-    """ creates the dataset """
 
-    for ep in range(horizon):
-        *_, experience = evaluate(agent = agent, timesteps = timesteps, evaluation_episodes = 1, label = 'creating_rollout', episode = ep, iterations = 10, desc=map, normalizer=normalizer, save_experience=True, wandb_log=False)
 
-        
-        with open(f"experience_ep_{ep}.pkl", "wb") as file:
-            pickle.dump(experience, file)
 
-    return experience
 
-def main(seed):
-    dim = 12
-    desc = generate_random_map(size=dim, seed = seed)
-    env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = "rgb_array")
+
+def main(seed, code, label, heads):
+    set_seed(seed=seed)
+    dim = 1500
+    desc = generate_custom_map(dim=dim)
+    beta = 0
+    name = f'{label}, seed:{seed}'
+    env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = None)
     env.reset(seed = seed)
     agent_params = {
         'state_size':env.observation_space.n, 
         'action_size':env.action_space.n
     }
-    agent = Q_Learning_Agent(**agent_params)
-    timesteps = 300
-    states_count, agent, normalizer = generate_agent (map = desc, env = env, agent = agent, timesteps = timesteps, horizon = int(1e4), dim=dim)
-    experience = rollout(agent=agent, normalizer=normalizer, timesteps=timesteps, horizon=1, map =desc)
+    if code == 2:
+        beta = 0.8
+        agent_params['beta'] = beta
+        agent = IR_Q_Learning_Agent(**agent_params)
+    elif code == 5:
+        if heads == 1: beta = 0
+        else: beta = 10
+        agent_params['num_of_agents'] = heads
+        agent_params['lambda_value'] = beta
+        agent_params['p'] = 0.99
+        agent = UCB_Q_Learning(**agent_params)
+    elif code == 1:
+        beta = 0.01
+        agent_params['beta'] = beta
+        agent_params['rollout_frequency'] = 0.05
+        agent = ADEU_Q_Learning(**agent_params)
+    else: 
+        agent = Q_Learning_Agent(**agent_params)
     
+    domain ="SafetyFrozenLake"
+    wandb_session(domain = domain, seed = seed, debug = True, code = code, name = name, beta = beta, heads = heads)
+    #since we have already define everything lets try to load the background knowledge
+    background_knowledge = load_background_knowledge(path = './experiments/tabular/Safety_CustomFrozenLake/background_experienc.pkl')
+    #now lets train the agent in a some speciffic states
+    sampled_experience = filter_states(background_knowledge, samples = dim**2)
+    #then I will train the agent in the `sampled experience`
+    agent = pretraining(agent, sampled_experience)
+    #after that we only need to run the standard training algorithm
+    #but in our new training loop we will also measure and the conflicts
+    state_count = run(env=env, 
+                      domain = domain, 
+                      agent=agent, 
+                      render=False, 
+                      horizon = int(1e5), 
+                      desc = desc, 
+                      dim= dim, 
+                      label=label, 
+                      code = code, 
+                      tofl = 1, 
+                      timesteps = int(5*dim),
+                      store_experience=False)
+    return
 
 
-if __name__=='__main__':
-    main(seed = 1)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Your script description here')
+    # Define hyperparameters as command-line arguments
+    parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--adeu', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
+
+    args = parser.parse_args()
+
+    # Access hyperparameters in your script
+    use_im = args.im
+    use_ade = args.adeu
+    use_ucb = args.ucb
+    heads = args.heads
+
+    arguments = {
+        'adeu': use_ade,
+        'intrisic motivation':use_im,
+        'ucb':use_ucb,
+        'Baseline': (not use_ade) and (not use_im) and (not use_ucb)
+    }
+    label = [a for a in arguments.keys() if arguments[a]][0]
+    
+    seed = 10
+    code = code_creation(adaptive_exploration=use_ade, use_rnd = use_im, ucb=use_ucb )
+    for s in range(seed):
+        main(seed = s, code = code, label = label, heads = heads )

@@ -9,10 +9,10 @@ from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 import argparse
 import sys
 import os
+import pickle
 
 
-
-KEEP_TRAJECTORY = True
+KEEP_TRAJECTORY = False
 
 
 def set_seed(seed):
@@ -104,7 +104,7 @@ def main(seed, code, label, heads = 0, type_of_map = 0):
         agent = Q_Learning_Agent(**agent_params)
     
     domain = "FrozenLake" if type_of_map == 0 else "CustomFrozenLake"
-    wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
+    wandb_session(domain = domain, seed = seed, debug = True, code = code, name = name, beta = beta, heads = heads)
 
     state_count = run(env=env, 
                       domain = domain, 
@@ -116,7 +116,8 @@ def main(seed, code, label, heads = 0, type_of_map = 0):
                       label=label, 
                       code = code, 
                       tofl = tofl, 
-                      timesteps = int(3*dim))
+                      timesteps = int(3*dim),
+                      store_experience=True)
     store(filename = f'experiments/tabular/{domain}/{label}/seed_{seed}', state_count = state_count, agent_params=agent_params)
     
 def store(filename, state_count, agent_params):
@@ -131,8 +132,9 @@ def store(filename, state_count, agent_params):
             f.write(f"{key}: {value}\n")
 
 
-def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0, seed = 0):
+def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0, seed = 0, store_experience = False):
     initial_exploration_rate = 1 
+    experience = []
     epsilon = np.linspace(initial_exploration_rate, 0.05, int(0.6 * horizon))
     percentage = 1
     normalizer = dim*(dim+1)/2
@@ -145,7 +147,23 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
         #after some timesteps perform the evaluation
         if episode % int(round(100/percentage)) == 0:
             keep_trajectory =( seed == 0 and type(agent) == ADEU_Q_Learning and KEEP_TRAJECTORY)
-            evaluate(agent, timesteps, domain = domain, evaluation_episodes = 3, label = label, episode = episode, iterations = int(0.2*horizon), desc = desc, normalizer=normalizer, keep_trajectories=keep_trajectory)
+            *_, episode_experience = evaluate(agent, 
+                                              timesteps, 
+                                              domain = domain, 
+                                              evaluation_episodes = 3, 
+                                              label = label, 
+                                              episode = episode, 
+                                              iterations = int(0.2*horizon), 
+                                              desc = desc, 
+                                              normalizer=normalizer, 
+                                              keep_trajectories=keep_trajectory,
+                                              save_experience=store_experience)
+            if store_experience:
+                from collections import deque
+
+                experience = deque(experience)
+                experience.extend(episode_experience)
+                experience = list(experience)  # Convert back to list if needed
             wandb.log({"std error during training": mean_std})
             mean_std = 0
         agent.set_eps(epsilon[episode if episode < epsilon.size else -1])
@@ -188,6 +206,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
                 agent.step([obs, action, reward, new_obs, done or truncated, mask])
             else:
                 agent.step([obs, action, reward, new_obs, done or truncated])
+            
             obs = new_obs
             
             if (done):
@@ -196,6 +215,12 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
             agent.rollout = False
     env.close()
     wandb.finish()
+    if store_experience:
+        save_dir = './experiments/tabular/Safety_CustomFrozenLake/'
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        with open(save_dir+'background_experienc.pkl', "wb") as file:
+            pickle.dump(experience, file)
     return states_count
  
  

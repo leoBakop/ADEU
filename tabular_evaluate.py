@@ -8,7 +8,10 @@ import os
 
 
 def evaluate(agent:Q_Learning_Agent | ADEU_Q_Learning, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, domain, save_experience = False,  wandb_log = True, keep_trajectories = False):
-    
+    """ We should note that Keep_trajectory refers to keeping the trajectory within an episode. Thus, we can create the figure
+        that outputs the policy, the exploration policy and the variance etc.
+        save_experience saves the experience to reuse it in the safety example    
+    """
     
     dim = len(desc)
     env = make_evaluation_env(iterations, episode, label, desc, domain)
@@ -65,7 +68,8 @@ def evaluate(agent:Q_Learning_Agent | ADEU_Q_Learning, timesteps, evaluation_epi
                 mean_reward[episode] = total_reward/(t+1)
                 mean_sum_reward[episode] = total_reward
                 break
-    store_trajectory(path=path, policy = np.array(policy), exploration_strategy=np.array(explortaion_strategy), variance=np.array(variance))
+    if keep_trajectories:
+        store_trajectory(path=path, policy = np.array(policy), exploration_strategy=np.array(explortaion_strategy), variance=np.array(variance))
     if wandb_log:
         wandb.log({"mean_evaluation_reward": np.mean(mean_reward), 'duration': np.mean(mean_timesteps), 'cumm_evaluation_reward': np.mean(mean_sum_reward)})
     env.close()
