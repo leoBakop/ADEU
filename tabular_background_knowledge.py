@@ -54,7 +54,7 @@ def pretraining(agent, background_knowledge, code_of_the_agent, iterations = 10)
                 agent.step([current_observation, action, reward, new_observation, done, mask])
             else:
                 agent.step([current_observation, action, reward, new_observation, done])
-    print('the agent was pretrained succesfully')
+    print('the agent pretrained succesfully')
     return agent
 
 def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0):
@@ -124,7 +124,6 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
                 #in our case this migh also be a forbidden array.
                 #so we have to check it out
                 if col != 1 and row < dim-2:
-                    print('check it out')
                     conflicts+= 1
                     
             if code == 5:
@@ -182,13 +181,17 @@ def main(seed, code, label, heads):
         agent = Q_Learning_Agent(**agent_params)
     
     domain ="SafetyFrozenLake"
-    wandb_session(domain = domain, seed = seed, debug = True, code = code, name = name, beta = beta, heads = heads)
+    wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
     #since we have already define everything lets try to load the background knowledge
     background_knowledge = load_background_knowledge(path = './experiments/tabular/Safety_CustomFrozenLake/background_experienc.pkl')
     #now lets train the agent in a some speciffic states
     sampled_experience = filter_states(background_knowledge, samples = dim**2)
     #then I will train the agent in the `sampled experience`
-    agent = pretraining(agent, sampled_experience)
+    agent = pretraining(agent, sampled_experience, code_of_the_agent=code)
+
+    #we free both the background knowledge and the sampled experience
+    del background_knowledge
+    del sampled_experience
     #after that we only need to run the standard training algorithm
     #but in our new training loop we will also measure and the conflicts
     state_count = run(env=env, 
@@ -200,9 +203,7 @@ def main(seed, code, label, heads):
                       dim= dim, 
                       label=label, 
                       code = code, 
-                      tofl = 1, 
-                      timesteps = int(5*dim),
-                      store_experience=False)
+                      tofl = 1)
     return
 
 
@@ -211,7 +212,7 @@ if __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--adeu', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
 
     args = parser.parse_args()
