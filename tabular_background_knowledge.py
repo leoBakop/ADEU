@@ -41,12 +41,18 @@ def load_background_knowledge(path):
         loaded_experience = pickle.load(file)
     return loaded_experience
 
-def filter_states(background_knowledge, conflicts, samples = 1500*2):
+def find_speciffic_experience(background_knowledge, row):
+    return
+
+def filter_states(background_knowledge, conflicts, dim, samples = 1500*2):
     """ this method returns the tuples in which an agent should be trained on.
         since the background knowledge contains only the correcttrajectory---and some initial training data
         I will just sample some random.     
     """
+
     sampled = random.sample(background_knowledge, k=samples)
+    for c in conflicts:
+        print()
     return sampled
 
 def pretraining(agent, background_knowledge, code_of_the_agent, conflicts, iterations = 10):
