@@ -11,20 +11,29 @@ from tabular_main import code_creation, set_seed, wandb_session, reverse_hash
 import random
 
 
-def generate_custom_map(dim):
+def generate_custom_map(dim, initial_epsilon = 0.5):
     desc = []
+    conflict_lines = []
+    epsilon = initial_epsilon
     initial_line = "SF" + "".join(["H" for _ in range(dim - 2)])
     desc.append(initial_line)
     #constructing the vertical path
-    for _ in range(3, dim): 
-        line_start = 'H' if np.random.rand() <0.9 else 'F' #create a hole at the left of the path with 90% probability
-        desc.append(line_start + "F" + "".join(["H" if np.random.rand() <0.8 else 'F'  for _ in range(dim - 2)]))   
+    for i in range(4, dim): 
+        if np.random.rand() < epsilon:
+            conflict_lines.append(i-3)
+            desc.append("HF" + "FFFFFFFFFF" + "".join(["H" for _ in range(dim - 12)]))   #outputs one H, 10+1 F
+            epsilon = epsilon*2 if epsilon*1.5  <0.5 else 0.5 
+        else:
+            epsilon = initial_epsilon
+            desc.append("HF" + "".join(["H" for _ in range(dim - 2)]))  
+    line_before_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))  
     line_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))     
     #cosntructing the horizontal path
+    desc.append(line_before_before)
     desc.append(line_before)
     final_line = "".join(["H" for _ in range(dim - 1)])+"G"
     desc.append(final_line)
-    return desc
+    return desc, conflict_lines
 
 
 def load_background_knowledge(path):
@@ -32,7 +41,7 @@ def load_background_knowledge(path):
         loaded_experience = pickle.load(file)
     return loaded_experience
 
-def filter_states(background_knowledge, samples):
+def filter_states(background_knowledge, conflicts, samples = 1500*2):
     """ this method returns the tuples in which an agent should be trained on.
         since the background knowledge contains only the correcttrajectory---and some initial training data
         I will just sample some random.     
@@ -40,7 +49,7 @@ def filter_states(background_knowledge, samples):
     sampled = random.sample(background_knowledge, k=samples)
     return sampled
 
-def pretraining(agent, background_knowledge, code_of_the_agent, iterations = 10):
+def pretraining(agent, background_knowledge, code_of_the_agent, conflicts, iterations = 10):
     """ 
         this method pretrains the agent on the background knowledge.
         this process is repeated multiple times
@@ -152,7 +161,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
 def main(seed, code, label, heads):
     set_seed(seed=seed)
     dim = 1500
-    desc = generate_custom_map(dim=dim)
+    desc, conflicts = generate_custom_map(dim=dim, initial_epsilon=0.1)
     beta = 0
     name = f'{label}, seed:{seed}'
     env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = None)
@@ -185,7 +194,7 @@ def main(seed, code, label, heads):
     #since we have already define everything lets try to load the background knowledge
     background_knowledge = load_background_knowledge(path = './experiments/tabular/Safety_CustomFrozenLake/background_experienc.pkl')
     #now lets train the agent in a some speciffic states
-    sampled_experience = filter_states(background_knowledge, samples = dim**2)
+    sampled_experience = filter_states(background_knowledge, conflicts, samples = dim**2)
     #then I will train the agent in the `sampled experience`
     agent = pretraining(agent, sampled_experience, code_of_the_agent=code)
 
