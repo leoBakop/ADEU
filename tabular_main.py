@@ -103,21 +103,21 @@ def main(seed, code, label, heads = 0, type_of_map = 0):
     else: 
         agent = Q_Learning_Agent(**agent_params)
     
-    domain = "FrozenLake" if type_of_map == 0 else "CustomFrozenLake"
+    domain = "FrozenLake" if type_of_map == 0 else "NewCustomFrozenLake"
     wandb_session(domain = domain, seed = seed, debug = True, code = code, name = name, beta = beta, heads = heads)
 
     state_count = run(env=env, 
                       domain = domain, 
                       agent=agent, 
                       render=render, 
-                      horizon = int(1e5), 
+                      horizon = int(0.3e5), 
                       desc = desc, 
                       dim= dim, 
                       label=label, 
                       code = code, 
                       tofl = tofl, 
                       timesteps = int(3*dim),
-                      store_experience=True)
+                      store_experience= (seed == 0 and code == 1))
     store(filename = f'experiments/tabular/{domain}/{label}/seed_{seed}', state_count = state_count, agent_params=agent_params)
     
 def store(filename, state_count, agent_params):
@@ -134,6 +134,7 @@ def store(filename, state_count, agent_params):
 
 def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0, seed = 0, store_experience = False):
     initial_exploration_rate = 1 
+    initial_store_experience = store_experience
     experience = []
     epsilon = np.linspace(initial_exploration_rate, 0.05, int(0.6 * horizon))
     percentage = 1
@@ -147,6 +148,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
         #after some timesteps perform the evaluation
         if episode % int(round(100/percentage)) == 0:
             keep_trajectory =( seed == 0 and type(agent) == ADEU_Q_Learning and KEEP_TRAJECTORY)
+            store_experience = (initial_store_experience and episode >horizon//2)
             *_, episode_experience = evaluate(agent, 
                                               timesteps, 
                                               domain = domain, 
@@ -179,8 +181,10 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
                 mean_std += std*percentage/(timesteps*100)
             else: action = agent.get_action(obs)
             
-            if tofl != 0 and action == 3:
-                action = np.random.choice(np.arange(2), size = 1)[0]
+            if tofl != 0 and action == 3 and col == 1:
+                action = np.random.choice(np.arange(3), size = 1)[0] #it was arrange(2)
+            if tofl != 0 and action == 0 and col > 1:   
+                action = np.random.choice(np.arange(1,4), size = 1)[0]
             new_obs, reward, done, truncated, info = env.step(action)
 
             row, col = reverse_hash(new_obs,dim)
@@ -189,7 +193,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
                 reward = -10
                 done = True
             elif desc[row][col] == 'G':
-                print ('target was founded')
+                #print ('target was founded')
                 reward = 100_000
                 done = True
             elif desc[row][col] == 'S':
@@ -216,7 +220,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
     env.close()
     wandb.finish()
     if store_experience:
-        save_dir = './experiments/tabular/Safety_CustomFrozenLake/'
+        save_dir = './experiments/tabular/NEWSafety_CustomFrozenLake/'
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         with open(save_dir+'background_experienc.pkl', "wb") as file:
@@ -243,7 +247,7 @@ if  __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--adeu', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
     #tofl means type of frozen lake
     parser.add_argument('--tofl', type=int, default=1, help='Would you like to use the standrad RND')

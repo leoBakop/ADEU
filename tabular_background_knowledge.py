@@ -19,13 +19,16 @@ def generate_custom_map(dim, initial_epsilon = 0.5):
     desc.append(initial_line)
     #constructing the vertical path
     for i in range(4, dim): 
+        if i == 4 or i==5: 
+            epsilon = 1 #just to make sure that the first lines will have a conflict
         if np.random.rand() < epsilon:
             conflict_lines.append(i-3)
             desc.append("HF" + "FFFFFFFFFF" + "".join(["H" for _ in range(dim - 12)]))   #outputs one H, 10+1 F
-            epsilon = epsilon*2 if epsilon*1.5  <0.5 else 0.5 
+            epsilon = 0.6 
         else:
             epsilon = initial_epsilon
             desc.append("HF" + "".join(["H" for _ in range(dim - 2)]))  
+        if (len(conflict_lines) > 100):epsilon = 0
     line_before_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))  
     line_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))     
     #cosntructing the horizontal path
@@ -33,6 +36,7 @@ def generate_custom_map(dim, initial_epsilon = 0.5):
     desc.append(line_before)
     final_line = "".join(["H" for _ in range(dim - 1)])+"G"
     desc.append(final_line)
+    print(f'{len(conflict_lines)} constraints were created')
     return desc, conflict_lines
 
 
@@ -41,39 +45,58 @@ def load_background_knowledge(path):
         loaded_experience = pickle.load(file)
     return loaded_experience
 
-def find_speciffic_experience(background_knowledge, row):
-    return
+def find_speciffic_experience(background_knowledge, row, dim):
+    random.shuffle(background_knowledge)
+    target_state = dim*row + 1
+
+    for exp in background_knowledge:
+        if exp[0] == target_state:
+            return exp
+    print('experience was not found')
+    return None
 
 def filter_states(background_knowledge, conflicts, dim, samples = 1500*2):
     """ this method returns the tuples in which an agent should be trained on.
         since the background knowledge contains only the correcttrajectory---and some initial training data
         I will just sample some random.     
     """
-
-    sampled = random.sample(background_knowledge, k=samples)
-    for c in conflicts:
-        print()
+    print('sampling the appropriate experience')
+    if samples > 0:
+        sampled = random.sample(background_knowledge, k=samples)
+    else:
+        sampled = []
+    for c in tqdm(conflicts):
+        exp = find_speciffic_experience(background_knowledge, c, dim)
+        if exp is not None:
+            sampled.append(exp)
     return sampled
 
-def pretraining(agent, background_knowledge, code_of_the_agent, conflicts, iterations = 10):
+def pretraining(agent, background_knowledge, conflicts, code_of_the_agent, dims, iterations = 10):
     """ 
         this method pretrains the agent on the background knowledge.
         this process is repeated multiple times
     """
-
+    if code == 1:
+        agent.beta = 100
     for i in tqdm(range(iterations)):
         random.shuffle(background_knowledge)
         for current_observation, action, reward, new_observation, done in background_knowledge:
+            reward *= 2_000 #it was 20
+            if current_observation == 52501:
+                print('debug')
             if code_of_the_agent == 5: #in the case of a ucb agent
                 mask = np.random.binomial(1, agent.p, agent.num_of_agents)
                 agent.step([current_observation, action, reward, new_observation, done, mask])
             else:
                 agent.step([current_observation, action, reward, new_observation, done])
     print('the agent pretrained succesfully')
+    if code == 1:
+        agent.beta = 0.01
     return agent
 
-def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0):
+def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_conflicts, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0):
     conflicts = 0
+    number_of_different_states = 1 # in this variable I will add (until th evaluation) the numeber of different states visited during an episode
     initial_exploration_rate = 1 
     epsilon = np.linspace(initial_exploration_rate, 0.05, int(0.6 * horizon))
     percentage = 1
@@ -92,14 +115,16 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
                     evaluation_episodes = 3, 
                     label = label, 
                     episode = episode, 
-                    iterations = int(0.2*horizon), 
+                    iterations = int(horizon + 100), 
                     desc = desc, 
                     normalizer=normalizer, 
                     keep_trajectories=False,
                     save_experience=False)
-
+            c = conflicts/(100/percentage)
             wandb.log({"std error during training": mean_std})
-            wandb.log({"mean conflicts per episode": conflicts/(100/percentage)})
+            wandb.log({"mean conflicts per episode": c})
+            wandb.log({'conflicts over numebr of unique states visisted per episode': conflicts/number_of_different_states}) #since both contflicts and number of different staes should have been normizlided with the same factor. I do normilize nothing
+            number_of_different_states = 0
             conflicts = 0
             mean_std = 0
         agent.set_eps(epsilon[episode if episode < epsilon.size else -1])
@@ -107,19 +132,28 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
         row, col = reverse_hash(obs,dim)
         states_count[row, col]+=1
         for t in range(timesteps):
-            
+
             if render: env.render()
             
+            row_obs, col_obs = reverse_hash(obs, dim)
+            if row_obs in cretaed_conflicts:
+                print('debug')
+            if obs == 52501:
+                print('debug')
             if code == 5: 
                 action, std = agent.get_action(obs)
                 mean_std += std*percentage/(timesteps*100)
             else: action = agent.get_action(obs)
             
-            if tofl != 0 and action == 3:
-                action = np.random.choice(np.arange(2), size = 1)[0]
+            if tofl != 0 and action == 3 and col == 1:
+                action = np.random.choice(np.arange(3), size = 1)[0] #it was arrange(2)
+            if tofl != 0 and action == 0 and col > 1:   
+                action = np.random.choice(np.arange(1,4), size = 1)[0]
+            
             new_obs, reward, done, truncated, info = env.step(action)
 
             row, col = reverse_hash(new_obs,dim)
+            
             states_count[row, col]+=1
             if desc[row][col] == 'H':
                 reward = -10
@@ -140,6 +174,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
                 #so we have to check it out
                 if col != 1 and row < dim-2:
                     conflicts+= 1
+                    #reward = (dim-1)*new_obs/normalizer
                     
             if code == 5:
                 mask = np.random.binomial(1, agent.p, agent.num_of_agents)
@@ -151,6 +186,8 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
             
             if (done):
                 break
+        number_of_different_states += t
+        different_states_visited_per_epsiode = []
         if code == 1: 
             agent.rollout = False
     env.close()
@@ -167,7 +204,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, domain, horiz
 def main(seed, code, label, heads):
     set_seed(seed=seed)
     dim = 1500
-    desc, conflicts = generate_custom_map(dim=dim, initial_epsilon=0.1)
+    desc, conflicts = generate_custom_map(dim=dim, initial_epsilon=0.05)
     beta = 0
     name = f'{label}, seed:{seed}'
     env = gym.make('FrozenLake-v1',  desc=desc, is_slippery = False, render_mode = None)
@@ -188,32 +225,48 @@ def main(seed, code, label, heads):
         agent_params['p'] = 0.99
         agent = UCB_Q_Learning(**agent_params)
     elif code == 1:
-        beta = 0.01
+        beta = 0.01 # it was 0.01, after the pretraining orocess is over this should change back to 0.01
         agent_params['beta'] = beta
-        agent_params['rollout_frequency'] = 0.05
+        agent_params['rollout_frequency'] = 0.0
         agent = ADEU_Q_Learning(**agent_params)
     else: 
         agent = Q_Learning_Agent(**agent_params)
     
     domain ="SafetyFrozenLake"
-    wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
     #since we have already define everything lets try to load the background knowledge
     background_knowledge = load_background_knowledge(path = './experiments/tabular/Safety_CustomFrozenLake/background_experienc.pkl')
+    
     #now lets train the agent in a some speciffic states
-    sampled_experience = filter_states(background_knowledge, conflicts, samples = dim**2)
+    
+    """ sampled_experience = filter_states(background_knowledge, conflicts, samples = 0, dim = dim)
+    with open('sampled_experience.pkl', 'wb') as f:
+        pickle.dump(sampled_experience, f) """
+    del background_knowledge
+    with open('sampled_experience.pkl', 'rb') as f:
+        sampled_experience = pickle.load(f)
     #then I will train the agent in the `sampled experience`
-    agent = pretraining(agent, sampled_experience, code_of_the_agent=code)
+    agent = pretraining(agent = agent, 
+                        background_knowledge=sampled_experience, 
+                        conflicts=conflicts, 
+                        dims=dim, 
+                        code_of_the_agent=code, 
+                        iterations = 1000)
+    
 
     #we free both the background knowledge and the sampled experience
-    del background_knowledge
+    
     del sampled_experience
+    wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
+
     #after that we only need to run the standard training algorithm
     #but in our new training loop we will also measure and the conflicts
     state_count = run(env=env, 
+                      cretaed_conflicts = conflicts,
                       domain = domain, 
+                      timesteps = int(3*dim),
                       agent=agent, 
                       render=False, 
-                      horizon = int(1e5), 
+                      horizon = int(1e4), 
                       desc = desc, 
                       dim= dim, 
                       label=label, 
@@ -227,7 +280,7 @@ if __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--adeu', action='store_true', default=True, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
 
     args = parser.parse_args()

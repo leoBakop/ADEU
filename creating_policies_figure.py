@@ -39,12 +39,13 @@ if __name__ == '__main__':
     #variance = exponential_smoothing(variance,x_axis, smoothing_param=0.1)
     plt.figure(figsize=(10, 6))  # Adjust figure size as needed
 
+
     # First subplot (top)
     plt.subplot(2, 1, 1)  # 2 rows, 1 column, first plot
     plt.plot(x_axis, policy, label=r"Policy $\pi(s)$", color="blue")
     plt.plot(x_axis, exploration_strategy, label=r"Exploration Strategy $N(\pi(s), g(f(s)))$", color="red", linestyle="--")
     plt.ylabel("Action")
-    plt.xlabel("Timesteps")
+    plt.xlabel("Timesteps within a single episode")
     plt.title("Policy and Exploration actions selected during the 900th episode")
     plt.legend()
     plt.grid(True)
@@ -57,13 +58,13 @@ if __name__ == '__main__':
     plt.subplot(2, 1, 2)  # 2 rows, 1 column, second plot
 
     # Plot the two segments with different colors
-    plt.plot(x_before, variance_before, color="blue", linestyle=":")
-    plt.plot(x_after, variance_after, color="green", linestyle=":")
+    plt.plot(x_before, variance_before, color="blue", linewidth= 3)
+    plt.plot(x_after, variance_after, color="blue", linewidth= 3)
 
     # Second subplot (bottom)
     #plt.plot(x_axis, variance, label="Variance", color="green", linestyle=":")
-    plt.title('Exploration rate g(f(s)) during the 900th episode')
-    plt.xlabel("Timesteps")
+    plt.title('Uncertainty g(f(s)) during the 900th episode')
+    plt.xlabel("Timesteps within a single episode")
     plt.ylabel("g(f(s))")
     plt.grid(True)
 

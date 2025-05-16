@@ -36,6 +36,7 @@ class IR_Q_Learning_Agent(Q_Learning_Agent):
         self.n = 0.1*np.ones(state_size)
         
     def step(self, tuple):
+        self.eps = 0.2 if self.eps > 0.2 else self.eps
         obs, action, reward, new_obs, done  = tuple 
         reward += self.beta/np.sqrt(self.n[new_obs])
         tuple = [obs, action, reward, new_obs, done]
@@ -43,6 +44,8 @@ class IR_Q_Learning_Agent(Q_Learning_Agent):
         return super().step(tuple)
     
     
+
+
 class UCB_Q_Learning():
     def __init__(self, state_size, action_size, num_of_agents, lambda_value, p):
         self.state_size = state_size
@@ -140,12 +143,15 @@ class ADEU_Q_Learning(Q_Learning_Agent):
 
         #getting all the q values for the corresponding state
         qs = self.q_table[obs]
-        self.exploration_rate = sigmoid( self.n[obs])
+        self.exploration_rate = sigmoid( np.sqrt(self.n[obs]))
         exploration_rate =  self.exploration_rate * qs
-        exploration_rate = np.clip(exploration_rate, 0 , 10)
-        probs = np.exp(exploration_rate)
-        probs/= np.sum(probs)
-        
+        exploration_rate = np.clip(exploration_rate, 0 , np.max(exploration_rate)) #we gurantee tat the exploration rate is positive
+        exploration_rate = (exploration_rate - np.min(exploration_rate)) / (np.max(exploration_rate) - np.min(exploration_rate))
+        exploration_rate = exploration_rate/np.sum(exploration_rate)
+        """ probs = np.exp(exploration_rate)
+        probs/= np.sum(probs) #it was probs instead of exploration rate
+         """
+        probs = exploration_rate
         action = np.random.choice(np.arange(0, self.action_size), size = 1, p = probs)
         return action[0]
     
@@ -157,7 +163,7 @@ class ADEU_Q_Learning(Q_Learning_Agent):
     
     def step(self, tuple):
         obs, action, reward, new_obs, done  = tuple 
-        self.n[new_obs] += self.beta
+        self.n[obs] += self.beta #it was n[new_obs]. I am not sure it makes sense but I should chek it on the non-sefate environment first
         return super().step(tuple)
     
     def get_exploration_rate(self):
@@ -166,4 +172,5 @@ class ADEU_Q_Learning(Q_Learning_Agent):
          return np.round(expl, decimals=3)     
 
 def sigmoid(x):
-    return 1/(1 + np.exp(-x)) -0.5
+    x-=0.5
+    return 1/(1 + np.exp(-x)) #-0.5

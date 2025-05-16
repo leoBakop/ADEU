@@ -8,7 +8,9 @@ CODES_MAP={'code: 0':'baseline',
            'code: 3': 'Noisy Nets',
            'code: 5': 'UCB',
            'code: 21': 'ADEU+im',
-           'code: 6': 'ADEU+ensemble'}
+           'code: 6': 'ADEU+ensemble',
+           
+           'code: 1': 'ADEU'}
 
 
 def mean_values(df, codes):
@@ -16,7 +18,7 @@ def mean_values(df, codes):
     extended_codes = list([c+' - cumm_evaluation_reward' for c in codes])
     for i,c in enumerate(extended_codes):
         rewards = df[c]
-        rewards = exponential_smoothing(y_values=rewards, x_values=df['Step'], smoothing_param=0.7)
+        rewards = exponential_smoothing(y_values=rewards, x_values=df['Step'], smoothing_param=0.0)
         rewards = np.array(rewards)
         mean_reward = round(np.mean(rewards), 0)
         max_reward = round(np.max(rewards), 0)
@@ -92,11 +94,11 @@ def exponential_smoothing(y_values, x_values, smoothing_param=0, viewport_scale=
     
 
 if __name__=='__main__':
-    file = 'wandb_results/swimmer_cumulative_rewards.csv'
+    file = 'wandb_results/new_custom_frozen_lake_cumulative_rewards.csv'
     # Load the CSV file into a DataFrame
     df = pd.read_csv(file)
     codes = ['code: 0', 'code: 2', 'code: 3', 'code: 5',  'code: 21' ,'code: 6']
-
+    codes = ['code: 0', 'code: 2', 'code: 5',  'code: 1' ]
     values = mean_values(df, codes)
     print_results(results = values)
     print('______________________________')

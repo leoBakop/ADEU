@@ -80,8 +80,9 @@ def evaluate(agent:Q_Learning_Agent | ADEU_Q_Learning, timesteps, evaluation_epi
 
 def make_evaluation_env(iterations, episode, label, desc, domain, **kwargs):
     eval_env = gym.make('FrozenLake-v1',desc = desc, is_slippery = False, render_mode = 'rgb_array', **kwargs)
-    
+    return eval_env
     if episode % iterations != 0: return eval_env 
+    if episode == 0: return eval_env
     eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/tabular/{label}/{domain}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'true_epside_{episode}')
    
     
