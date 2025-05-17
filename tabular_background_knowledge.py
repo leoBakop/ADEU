@@ -81,8 +81,9 @@ def pretraining(agent, background_knowledge, conflicts, code_of_the_agent, dims,
     for i in tqdm(range(iterations)):
         random.shuffle(background_knowledge)
         for current_observation, action, reward, new_observation, done in background_knowledge:
+            action = 1 
             reward *= 2_000 #it was 20
-            if current_observation == 52501:
+            if current_observation == 123001:
                 print('debug')
             if code_of_the_agent == 5: #in the case of a ucb agent
                 mask = np.random.binomial(1, agent.p, agent.num_of_agents)
@@ -136,10 +137,10 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_confl
             if render: env.render()
             
             row_obs, col_obs = reverse_hash(obs, dim)
-            if row_obs in cretaed_conflicts:
+            """ if row_obs in cretaed_conflicts:
                 print('debug')
             if obs == 52501:
-                print('debug')
+                print('debug') """
             if code == 5: 
                 action, std = agent.get_action(obs)
                 mean_std += std*percentage/(timesteps*100)
@@ -240,8 +241,8 @@ def main(seed, code, label, heads):
     
     """ sampled_experience = filter_states(background_knowledge, conflicts, samples = 0, dim = dim)
     with open('sampled_experience.pkl', 'wb') as f:
-        pickle.dump(sampled_experience, f) """
-    del background_knowledge
+        pickle.dump(sampled_experience, f)
+    del background_knowledge """
     with open('sampled_experience.pkl', 'rb') as f:
         sampled_experience = pickle.load(f)
     #then I will train the agent in the `sampled experience`
@@ -280,7 +281,7 @@ if __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--adeu', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
 
     args = parser.parse_args()
