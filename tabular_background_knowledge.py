@@ -18,21 +18,21 @@ def generate_custom_map(dim, initial_epsilon = 0.5):
     initial_line = "SF" + "".join(["H" for _ in range(dim - 2)])
     desc.append(initial_line)
     #constructing the vertical path
-    for i in range(4, dim): 
-        if i == 4 or i==5: 
+    for i in range(3, dim): 
+        if i == 3 or i==5: 
             epsilon = 1 #just to make sure that the first lines will have a conflict
         if np.random.rand() < epsilon:
-            conflict_lines.append(i-3)
-            desc.append("HF" + "FFFFFFFFFF" + "".join(["H" for _ in range(dim - 12)]))   #outputs one H, 10+1 F
-            epsilon = 0.6 
+            conflict_lines.append(i-2)
+            desc.append("HF" + "FFF" + "".join(["H" for _ in range(dim - 5)]))   #outputs one H, 10+1 F
+            epsilon = 0.3
         else:
             epsilon = initial_epsilon
             desc.append("HF" + "".join(["H" for _ in range(dim - 2)]))  
         if (len(conflict_lines) > 100):epsilon = 0
-    line_before_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))  
+    #line_before_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))  
     line_before= ("HF" + "".join(["F" for _ in range(dim - 2)]))     
     #cosntructing the horizontal path
-    desc.append(line_before_before)
+    #desc.append(line_before_before)
     desc.append(line_before)
     final_line = "".join(["H" for _ in range(dim - 1)])+"G"
     desc.append(final_line)
@@ -95,6 +95,29 @@ def pretraining(agent, background_knowledge, conflicts, code_of_the_agent, dims,
         agent.beta = 0.01
     return agent
 
+def backgroun_knowledge(conflict_lines, dims, agent, code_of_the_agent):
+    high_reward = 10_000
+    if code == 1:
+        agent.beta = 100
+    for c in conflict_lines:
+        conflict_state = (c*dims)+1
+        if code_of_the_agent == 5: #in the case of a ucb agent
+            mask = np.random.binomial(1, agent.p, agent.num_of_agents)
+            agent.step([conflict_state, 1, conflict_state * high_reward, conflict_state+dims, False, mask])
+            #now in the rare case that tghe aget will visit the conflict, lets motivate it to return to the previous state
+            #agent.step([conflict_state, 1, high_reward, conflict_state+dims, False, mask])
+        else:
+            agent.step([conflict_state, 1, conflict_state * high_reward, conflict_state+dims, False])
+            #now in the rare case that tghe aget will visit the conflict, lets motivate it to return to the previous state
+            #agent.step([conflict_state, 1, high_reward, conflict_state+dims, False])
+
+    #also inform the agent about the 
+            
+
+    if code == 1:
+        agent.beta = 0.01
+    return agent
+
 def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_conflicts, domain, horizon = 1_000, timesteps = 1000, render = False, label = 0, desc = None, dim = 50, tofl = 0):
     conflicts = 0
     number_of_different_states = 1 # in this variable I will add (until th evaluation) the numeber of different states visited during an episode
@@ -137,10 +160,9 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_confl
             if render: env.render()
             
             row_obs, col_obs = reverse_hash(obs, dim)
-            """ if row_obs in cretaed_conflicts:
-                print('debug')
-            if obs == 52501:
-                print('debug') """
+            #if row_obs in cretaed_conflicts:
+            #    print('debug')
+            
             if code == 5: 
                 action, std = agent.get_action(obs)
                 mean_std += std*percentage/(timesteps*100)
@@ -160,7 +182,6 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_confl
                 reward = -10
                 done = True
             elif desc[row][col] == 'G':
-                print ('target was founded')
                 reward = 100_000
                 done = True
             elif desc[row][col] == 'S':
@@ -173,8 +194,9 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_confl
                 truncated = False
                 #in our case this migh also be a forbidden array.
                 #so we have to check it out
-                if col != 1 and row < dim-2:
+                if col != 1 and row in cretaed_conflicts:
                     conflicts+= 1
+                    reward = 0
                     #reward = (dim-1)*new_obs/normalizer
                     
             if code == 5:
@@ -235,28 +257,29 @@ def main(seed, code, label, heads):
     
     domain ="SafetyFrozenLake"
     #since we have already define everything lets try to load the background knowledge
-    background_knowledge = load_background_knowledge(path = './experiments/tabular/Safety_CustomFrozenLake/background_experienc.pkl')
+    #background_knowledge = load_background_knowledge(path = './experiments/tabular/Safety_CustomFrozenLake/background_experienc.pkl')
     
     #now lets train the agent in a some speciffic states
     
     """ sampled_experience = filter_states(background_knowledge, conflicts, samples = 0, dim = dim)
     with open('sampled_experience.pkl', 'wb') as f:
         pickle.dump(sampled_experience, f)
-    del background_knowledge """
+    del background_knowledge 
     with open('sampled_experience.pkl', 'rb') as f:
-        sampled_experience = pickle.load(f)
+        sampled_experience = pickle.load(f) """
     #then I will train the agent in the `sampled experience`
-    agent = pretraining(agent = agent, 
+    """agent = pretraining(agent = agent, 
                         background_knowledge=sampled_experience, 
                         conflicts=conflicts, 
                         dims=dim, 
                         code_of_the_agent=code, 
-                        iterations = 1000)
+                        iterations = 1000)"""
+    agent = backgroun_knowledge(conflict_lines=conflicts, dims = dim, agent=agent, code_of_the_agent=code)
     
 
     #we free both the background knowledge and the sampled experience
     
-    del sampled_experience
+    #del sampled_experience
     wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
 
     #after that we only need to run the standard training algorithm
