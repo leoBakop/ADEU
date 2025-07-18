@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from q_learning_agent import Q_Learning_Agent, IR_Q_Learning_Agent, UCB_Q_Learning, ADEU_Q_Learning
+from q_learning_agent import Q_Learning_Agent, IR_Q_Learning_Agent, UCB_Q_Learning, ADEU_Q_Learning, sADEU_safety,sADEU_safety_uncertainty
 from tabular_evaluate import evaluate
 from tqdm import tqdm
 import argparse
@@ -106,6 +106,8 @@ def backgroun_knowledge(conflict_lines, dims, agent, code_of_the_agent):
             agent.step([conflict_state, 1, conflict_state * high_reward, conflict_state+dims, False, mask])
             #now in the rare case that tghe aget will visit the conflict, lets motivate it to return to the previous state
             #agent.step([conflict_state, 1, high_reward, conflict_state+dims, False, mask])
+        elif code_of_the_agent == 11 or code_of_the_agent == 12:
+            agent.step([conflict_state, 1, conflict_state * high_reward, conflict_state+dims, -1, False])
         else:
             agent.step([conflict_state, 1, conflict_state * high_reward, conflict_state+dims, False])
             #now in the rare case that tghe aget will visit the conflict, lets motivate it to return to the previous state
@@ -134,6 +136,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_confl
         #after some timesteps perform the evaluation
         if episode % int(round(100/percentage)) == 0:
             evaluate(agent, 
+                    env,
                     timesteps, 
                     domain = domain, 
                     evaluation_episodes = 3, 
@@ -178,6 +181,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_confl
             row, col = reverse_hash(new_obs,dim)
             
             states_count[row, col]+=1
+            cost = 0
             if desc[row][col] == 'H':
                 reward = -10
                 done = True
@@ -195,6 +199,7 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_confl
                 #in our case this migh also be a forbidden array.
                 #so we have to check it out
                 if col != 1 and row in cretaed_conflicts:
+                    cost = 2
                     conflicts+= 1
                     reward = 0
                     #reward = (dim-1)*new_obs/normalizer
@@ -202,6 +207,8 @@ def run(env:gym.Env, agent:Q_Learning_Agent|ADEU_Q_Learning, code, cretaed_confl
             if code == 5:
                 mask = np.random.binomial(1, agent.p, agent.num_of_agents)
                 agent.step([obs, action, reward, new_obs, done or truncated, mask])
+            elif code == 11 or code == 12:
+                agent.step([obs, action, reward, new_obs, cost, done or truncated])
             else:
                 agent.step([obs, action, reward, new_obs, done or truncated])
             
@@ -252,6 +259,19 @@ def main(seed, code, label, heads):
         agent_params['beta'] = beta
         agent_params['rollout_frequency'] = 0.0
         agent = ADEU_Q_Learning(**agent_params)
+    elif code == 11:
+        beta = 1
+        agent_params['beta'] = beta
+        agent_params['delta'] = 0.01
+        agent_params['initial_expected_cost'] = 0.1
+        agent = sADEU_safety(**agent_params)
+    elif code == 12:
+        beta = 1
+        agent_params['beta'] = beta
+        agent_params['delta'] = 0.01
+        agent_params['initial_expected_cost'] = 0.01
+        agent = sADEU_safety_uncertainty(**agent_params)
+
     else: 
         agent = Q_Learning_Agent(**agent_params)
     
@@ -306,7 +326,8 @@ if __name__ == '__main__':
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
-
+    parser.add_argument('--sadeu', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--sadeu_unc', action='store_true', default=True, help='Would you like to use the standrad RND')
     args = parser.parse_args()
 
     # Access hyperparameters in your script
@@ -314,9 +335,13 @@ if __name__ == '__main__':
     use_ade = args.adeu
     use_ucb = args.ucb
     heads = args.heads
+    use_sadeu = args.sadeu
+    use_sadeu_unc = args.sadeu_unc
 
     arguments = {
         'adeu': use_ade,
+        'sadeu' : use_sadeu,
+        'sadeu_unc' : use_sadeu_unc,
         'intrisic motivation':use_im,
         'ucb':use_ucb,
         'Baseline': (not use_ade) and (not use_im) and (not use_ucb)
@@ -324,6 +349,6 @@ if __name__ == '__main__':
     label = [a for a in arguments.keys() if arguments[a]][0]
     
     seed = 5
-    code = code_creation(adaptive_exploration=use_ade, use_rnd = use_im, ucb=use_ucb )
+    code = code_creation(adaptive_exploration=use_ade, use_rnd = use_im, ucb=use_ucb, use_sadeu = use_sadeu, use_sadeu_unc = use_sadeu_unc )
     for s in range(seed):
         main(seed = s, code = code, label = label, heads = heads )

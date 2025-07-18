@@ -175,6 +175,81 @@ class ADEU_Q_Learning(Q_Learning_Agent):
          expl /= 40.033
          return np.round(expl, decimals=3)     
 
+
+
+class sADEU_safety(ADEU_Q_Learning):
+    ''' This class only implementes the sADEU that calculates the probabilities based only in the 
+    expected cost and the Q values. '''
+
+    def __init__(self, state_size, action_size, beta, initial_expected_cost, delta = .01):
+        rollout_frequency = 0 # it was set to zero since we do not like to perform rolluts
+        super().__init__(state_size, action_size, beta, rollout_frequency)
+        self.gtd = np.zeros([self.state_size, self.action_size]) + initial_expected_cost
+        self.delta = delta
+        self.initial_expected_cost = initial_expected_cost
+
+    def step(self, tuple):
+        
+        obs, action, reward, new_obs, cost, done  = tuple 
+        if cost == -1: #we are in the background knowledge procedure
+            cost = 5*self.initial_expected_cost
+        self.gtd[obs, action] = (self.gtd[obs, action] * self.n[obs] + cost) / (self.n[obs] + self.beta) 
+        return super().step([obs, action, reward, new_obs, done])
+    
+    def get_action(self, obs):
+        
+        #getting all the q values for the corresponding state
+        qs = self.q_table[obs]
+        self.exploration_rate = np.exp( - self.gtd[obs]/self.delta )
+        exploration_rate =  self.exploration_rate 
+        
+        #exploration_rate = np.clip(exploration_rate, 0 , np.max(exploration_rate)) #we gurantee tat the exploration rate is positive
+        
+        #exploration_rate = (exploration_rate - np.min(exploration_rate))/ (np.max(exploration_rate) - np.min(exploration_rate))
+        exploration_rate = exploration_rate/np.sum(exploration_rate)
+        probs = exploration_rate
+        
+        '''probs = np.exp(exploration_rate)
+        probs/= np.sum(probs) #it was probs instead of exploration rate'''
+        
+        
+        action = np.random.choice(np.arange(0, self.action_size), size = 1, p = probs)
+        return action[0]
+    
+
+class sADEU_safety_uncertainty(sADEU_safety):
+    '''class that implements the safety (depending on expected cost)
+     and uncertainty agent '''
+    def __init__(self, state_size, action_size, beta, initial_expected_cost, delta=0.01):
+        super().__init__(state_size, action_size, beta, initial_expected_cost, delta)
+
+    def get_action(self, obs):
+        qs = self.q_table[obs]
+        f_unc = sigmoid(self.beta * np.sqrt(self.n[obs]))*qs
+        unc_term = f_unc / ((2 + np.max(qs)*(np.max(self.gtd[obs]) > np.max(qs)) + np.max(- self.gtd[obs]/self.delta)) **2)
+        
+        
+        if np.max(np.exp((- self.gtd[obs]/self.delta))) > np.max(np.exp(unc_term)) and np.max(self.gtd[obs]) < 0.1:
+            print('d')
+
+        #prevent from overfloating
+        x = np.clip( (- self.gtd[obs]/self.delta) + unc_term, a_min=None, a_max=709)  # max float for exp
+        self.exploration_rate = np.exp(x)
+        exploration_rate =  self.exploration_rate 
+        
+        exploration_rate = np.clip(exploration_rate, 0 , np.max(exploration_rate)) #we gurantee tat the exploration rate is positive
+        
+        #exploration_rate = (exploration_rate - np.min(exploration_rate))/ (np.max(exploration_rate) - np.min(exploration_rate))
+        exploration_rate = exploration_rate/np.sum(exploration_rate)
+        probs = exploration_rate
+        
+        '''probs = np.exp(exploration_rate)
+        probs/= np.sum(probs) #it was probs instead of exploration rate'''
+        
+        
+        action = np.random.choice(np.arange(0, self.action_size), size = 1, p = probs)
+        return action[0]
+
 def sigmoid(x):
     x-=5 #0.5
     return 1/(1 + np.exp(-x)) #-0.5

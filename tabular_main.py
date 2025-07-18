@@ -233,10 +233,12 @@ def reverse_hash(hash_code, ncols):
     col = hash_code % ncols
     return row, col
     
-def code_creation(adaptive_exploration=True, use_rnd = False, ucb = False,):
+def code_creation(adaptive_exploration=True, use_rnd = False, ucb = False,use_sadeu = False, use_sadeu_unc = False):
     
     retval = 0
     if ucb:return retval + 5
+    if use_sadeu_unc : return retval + 12
+    if use_sadeu: return retval + 11
     if adaptive_exploration: return retval + 1
     if use_rnd: return retval + 2
     return retval

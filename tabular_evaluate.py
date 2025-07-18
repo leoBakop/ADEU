@@ -7,14 +7,14 @@ from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 import os
 
 
-def evaluate(agent:Q_Learning_Agent | ADEU_Q_Learning, timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, domain, save_experience = False,  wandb_log = True, keep_trajectories = False):
+def evaluate(agent:Q_Learning_Agent | ADEU_Q_Learning, env,  timesteps, evaluation_episodes, label, episode, iterations,desc, normalizer, domain, save_experience = False,  wandb_log = True, keep_trajectories = False):
     """ We should note that Keep_trajectory refers to keeping the trajectory within an episode. Thus, we can create the figure
         that outputs the policy, the exploration policy and the variance etc.
         save_experience saves the experience to reuse it in the safety example    
     """
     
     dim = len(desc)
-    env = make_evaluation_env(iterations, episode, label, desc, domain)
+    #env = make_evaluation_env(iterations, episode, label, desc, domain)
     env.reset(seed = np.random.randint(low = 1, high = 9e+10))
     mean_reward = np.zeros(evaluation_episodes)
     mean_timesteps = np.zeros(evaluation_episodes)
@@ -81,12 +81,7 @@ def evaluate(agent:Q_Learning_Agent | ADEU_Q_Learning, timesteps, evaluation_epi
 def make_evaluation_env(iterations, episode, label, desc, domain, **kwargs):
     eval_env = gym.make('FrozenLake-v1',desc = desc, is_slippery = False, render_mode = 'rgb_array', **kwargs)
     return eval_env
-    if episode % iterations != 0: return eval_env 
-    if episode == 0: return eval_env
-    eval_env = RecordVideo(eval_env, video_folder = f'./videos/final_experiments/tabular/{label}/{domain}/', episode_trigger= lambda x:  x % iterations == 0, name_prefix=f'true_epside_{episode}')
-   
     
-    return eval_env
 
 
 def reverse_hash(hash_code, ncols):
