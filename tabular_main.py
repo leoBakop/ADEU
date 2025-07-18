@@ -247,7 +247,7 @@ if  __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--im', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--ucb', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--adeu', action='store_true', default=True, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
     #tofl means type of frozen lake
     parser.add_argument('--tofl', type=int, default=1, help='Would you like to use the standrad RND')

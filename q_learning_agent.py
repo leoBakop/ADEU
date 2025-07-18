@@ -145,13 +145,17 @@ class ADEU_Q_Learning(Q_Learning_Agent):
         qs = self.q_table[obs]
         self.exploration_rate = sigmoid( np.sqrt(self.n[obs]))
         exploration_rate =  self.exploration_rate * qs
+        
         exploration_rate = np.clip(exploration_rate, 0 , np.max(exploration_rate)) #we gurantee tat the exploration rate is positive
-        exploration_rate = (exploration_rate - np.min(exploration_rate)) / (np.max(exploration_rate) - np.min(exploration_rate))
+        
+        #exploration_rate = (exploration_rate - np.min(exploration_rate))/ (np.max(exploration_rate) - np.min(exploration_rate))
         exploration_rate = exploration_rate/np.sum(exploration_rate)
-        """ probs = np.exp(exploration_rate)
-        probs/= np.sum(probs) #it was probs instead of exploration rate
-         """
         probs = exploration_rate
+        
+        '''probs = np.exp(exploration_rate)
+        probs/= np.sum(probs) #it was probs instead of exploration rate'''
+        
+        
         action = np.random.choice(np.arange(0, self.action_size), size = 1, p = probs)
         return action[0]
     
@@ -172,5 +176,5 @@ class ADEU_Q_Learning(Q_Learning_Agent):
          return np.round(expl, decimals=3)     
 
 def sigmoid(x):
-    x-=0.5
+    x-=5 #0.5
     return 1/(1 + np.exp(-x)) #-0.5

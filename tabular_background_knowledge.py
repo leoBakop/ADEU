@@ -96,7 +96,7 @@ def pretraining(agent, background_knowledge, conflicts, code_of_the_agent, dims,
     return agent
 
 def backgroun_knowledge(conflict_lines, dims, agent, code_of_the_agent):
-    high_reward = 10_000
+    high_reward = 5_000
     if code == 1:
         agent.beta = 100
     for c in conflict_lines:
@@ -280,7 +280,7 @@ def main(seed, code, label, heads):
     #we free both the background knowledge and the sampled experience
     
     #del sampled_experience
-    wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
+    wandb_session(domain = domain, seed = seed, debug = True, code = code, name = name, beta = beta, heads = heads)
 
     #after that we only need to run the standard training algorithm
     #but in our new training loop we will also measure and the conflicts
@@ -323,7 +323,7 @@ if __name__ == '__main__':
     }
     label = [a for a in arguments.keys() if arguments[a]][0]
     
-    seed = 10
+    seed = 5
     code = code_creation(adaptive_exploration=use_ade, use_rnd = use_im, ucb=use_ucb )
     for s in range(seed):
         main(seed = s, code = code, label = label, heads = heads )

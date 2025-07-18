@@ -20,8 +20,8 @@ def mean_values(df, codes):
         rewards = df[c]
         rewards = exponential_smoothing(y_values=rewards, x_values=df['Step'], smoothing_param=0.0)
         rewards = np.array(rewards)
-        mean_reward = round(np.mean(rewards), 0)
-        max_reward = round(np.max(rewards), 0)
+        mean_reward = round(np.mean(rewards), 2)
+        max_reward = round(np.max(rewards), 2)
         values[CODES_MAP[codes[i]]] = [mean_reward,max_reward]
     return values
 
@@ -94,7 +94,7 @@ def exponential_smoothing(y_values, x_values, smoothing_param=0, viewport_scale=
     
 
 if __name__=='__main__':
-    file = 'wandb_results/new_custom_frozen_lake_cumulative_rewards.csv'
+    file = 'wandb_results/safety_frozen_lake_cumulative_rewards.csv'
     # Load the CSV file into a DataFrame
     df = pd.read_csv(file)
     codes = ['code: 0', 'code: 2', 'code: 3', 'code: 5',  'code: 21' ,'code: 6']

@@ -19,7 +19,7 @@ from network import UNCERTAINTY
 from td3_evaluate import evaluate
 from utils import make_observation_franz_kitchen
 import time
-KEEP_TRAJECTORY = True
+KEEP_TRAJECTORY = False
 
 #defining some global variables
 GYMNASIUM_ROBOTIC_DOMAINS =[
@@ -49,7 +49,7 @@ def set_seed(seed):
 
 
 
-def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per,include_pos,adeu_ensemble, **kwargs):
+def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, mod_rnd, per,include_pos,adeu_ensemble, rho, **kwargs):
     set_seed(seed)
     if KEEP_TRAJECTORY:
         print('In this ran, some statistics will be kept')
@@ -123,7 +123,9 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     elif isinstance(observation, dict):
             observation = np.concatenate([arr for arr in observation.values()])
 
-
+    eps = rho if rho != -1 else 0
+    eps = 0.3 if not adeu_ensemble else eps
+    print(f'rho was set to {eps}')
     batch_size = 256
     lr = 5e-5 #it was 3e-4 ,
     uncertainty_const = 1.05
@@ -147,7 +149,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     "mod_rnd":mod_rnd,
     "per":per,
     "adaptive_exploration": adaptive_exploration,
-    "eps":0.3 if not adeu_ensemble else 0.0, #it was 0.0005
+    "eps":eps, #it was 0.0005
     "use_rnd": use_rnd,
     "use_noisy_nets": noisy_nets,
     "uncertainty_const" : uncertainty_const
@@ -157,17 +159,20 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     if not os.path.exists(filename+'/stored_data'):
         os.makedirs(filename+'/stored_data')
     if adeu_ensemble:
+        lambda_parameter = 1 #it was 1
         N = 5
         agent_params['train_frequency']*=N
-        agent = TD3_Ensemble_ADEU(agent_params = agent_params, N = N, lambda_parameter=1, beta = 1)
+        agent = TD3_Ensemble_ADEU(agent_params = agent_params, N = N, lambda_parameter=lambda_parameter, beta = 1)
     elif not ucb:
+        lambda_parameter = None
         agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
         if use_rnd: agent.set_uncertainty(1)
     else:
+        lambda_parameter = 10 #it was 10
         N = 5
         agent_params['train_frequency']*=N
-        agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=10, beta = 1)
-    wandb_session(domain, include_pos = include_pos, name=name, lr = lr, uc = uncertainty_const, code=code_creation(use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per, adeu_ensemble=adeu_ensemble), debug = debug)
+        agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=lambda_parameter, beta = 1)
+    wandb_session(domain = domain, include_pos = include_pos, name=name, lambda_parameter = lambda_parameter, lr = lr, uc = uncertainty_const, rho =rho, code=code_creation(rho = rho,use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per, adeu_ensemble=adeu_ensemble), debug = debug)
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, total_timesteps = \
         run(kwargs=kwargs,
             maze = maze, 
@@ -313,10 +318,10 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
     wandb.finish()
     return mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_episode, var_per_episode, total_timesteps
 
-def wandb_session(domain , include_pos, uc=1.5, name = None, code = 0, lr = 0, debug = False):
+def wandb_session(domain , include_pos, rho, uc=1.5, name = None, code = 0, lr = 0, debug = False, lambda_parameter = -1):
     # start a new wandb run to track this script
-    project = f"ECAI-2025| TD3, Adaptive Exploration {domain}" if not include_pos \
-            else f"ECAI-2025| TD3, Adaptive Exploration {domain}, including position" 
+    project = f"Neurips-2025| TD3, Adaptive Exploration {domain}" if not include_pos \
+            else f"Neurips-2025| TD3, Adaptive Exploration {domain}, including position" 
     project = "debug" if debug else project
     wandb.init(
         # set the wandb project where this run will be logged
@@ -326,7 +331,9 @@ def wandb_session(domain , include_pos, uc=1.5, name = None, code = 0, lr = 0, d
         config={
         "code":code,
         "lr":lr,
-        "unc_cost": uc
+        "unc_cost": uc,
+        'rho':rho,
+        'lambda':lambda_parameter,
         }
     )
     
@@ -354,9 +361,10 @@ def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards
             f.write(f"{key}: {value}\n")
 
     return
-def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False, mod_rnd = False, per = False, ucb = False, adeu_ensemble = False):
+def code_creation(rho, adaptive_exploration=True, use_rnd = False, noisy_nets = False, comb = False, mod_rnd = False, per = False, ucb = False, adeu_ensemble = False):
     retval = 20 if mod_rnd else 0
     retval+= 100 if per else 0
+    
     #if mod_rnd and noisy_nets: sys.exit(-1)
     if per and use_rnd: sys.exit(-1)
     if comb:
@@ -366,7 +374,10 @@ def code_creation(adaptive_exploration=True, use_rnd = False, noisy_nets = False
     if adaptive_exploration: return retval + 1
     if use_rnd: return retval + 2
     if ucb: return retval + 5
-    if adeu_ensemble: return retval + 6
+    if adeu_ensemble: 
+        if rho != -1:
+            return retval + 7
+        return retval + 6
     if mod_rnd: sys.exit(-1)
     return retval
 
@@ -384,6 +395,7 @@ if __name__ == '__main__':
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='InvertedPendulum-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=280, help='what are the maximum timesteps per episode')
+    parser.add_argument('--rho', type=float, default=-1.0, help='what are the maximum timesteps per episode')
    
     args = parser.parse_args()
 
@@ -398,6 +410,7 @@ if __name__ == '__main__':
     mod_rnd = args.mod_rnd
     per = args.per
     ucb = args.UCB
+    rho = args.rho
     adeu_ensemble = args.adeu_ensemble
     include_pos = args.include_pos
 
@@ -430,11 +443,19 @@ if __name__ == '__main__':
 
         
 
-    seeds = 3
+    seeds = 10
     
     mean_evaluation_rewards = []
-
-    print(f"{domain} + code:{code_creation(adaptive_exploration=ade, ucb = ucb, use_rnd=use_rnd, noisy_nets=noisy_nets, comb=comb, per=per, mod_rnd=mod_rnd, adeu_ensemble=adeu_ensemble)}")
+    code = code_creation(adaptive_exploration=ade, 
+                                           ucb = ucb, 
+                                           use_rnd=use_rnd, 
+                                           noisy_nets=noisy_nets, 
+                                           comb=comb, 
+                                           per=per, 
+                                           mod_rnd=mod_rnd, 
+                                           adeu_ensemble=adeu_ensemble,
+                                           rho = rho)
+    print(f"{domain} + code:{code}")
 
     for s in range(seeds):
         main(seed = s, 
@@ -449,5 +470,6 @@ if __name__ == '__main__':
              per=per, 
              mod_rnd = mod_rnd,
              include_pos = include_pos,
-             adeu_ensemble = adeu_ensemble
-             )
+             adeu_ensemble = adeu_ensemble,
+             rho = rho)
+             
