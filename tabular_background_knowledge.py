@@ -300,7 +300,7 @@ def main(seed, code, label, heads):
     #we free both the background knowledge and the sampled experience
     
     #del sampled_experience
-    wandb_session(domain = domain, seed = seed, debug = True, code = code, name = name, beta = beta, heads = heads)
+    wandb_session(domain = domain, seed = seed, debug = False, code = code, name = name, beta = beta, heads = heads)
 
     #after that we only need to run the standard training algorithm
     #but in our new training loop we will also measure and the conflicts
@@ -327,7 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('--adeu', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--heads', type=int, default=-1, help='Would you like to use the standrad RND')
     parser.add_argument('--sadeu', action='store_true', default=False, help='Would you like to use the standrad RND')
-    parser.add_argument('--sadeu_unc', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--sadeu_unc', action='store_true', default=False, help='Would you like to use the standrad RND')
     args = parser.parse_args()
 
     # Access hyperparameters in your script

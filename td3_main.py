@@ -26,6 +26,7 @@ GYMNASIUM_ROBOTIC_DOMAINS =[
     'AntMaze_UMazeDense-v5',
     'PointMaze_LargeDense-v3',
     'FetchSlideDense-v3',
+    'FetchSlide-v3',
     'FrankaKitchen-v1'
 ] 
 
@@ -265,8 +266,12 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
         
         if total_timesteps > 1.2e+6 and not max_timesteps_reached:
             max_timesteps_reached = True
-            print('1.2 timesteps reached')        
-            agent.modify_train_frequency(250)
+            print('1.2 timesteps reached') 
+            if isinstance(agent, TD3_Ensemble_ADEU) and (horizon * timesteps > 40e6): #this condition was added only for the humanoid. In original code I amy discard this.
+                print('steps modification for adeu ensemble')
+                agent.modify_train_frequency(10_000)
+            else:
+                agent.modify_train_frequency(250)
         
         if maze:
             current_observation, info = env.reset(options = options) #seed is not used as the documentation indicates
@@ -426,13 +431,14 @@ if __name__ == '__main__':
         'InvertedDoublePendulum-v5':30e6,
         'InvertedPendulum-v5':10e6,
         'Ant-v5':5e6,
-        'HumanoidStandup-v5':5e6,
+        'HumanoidStandup-v5':3.5e6,#it was 5 in neurips
         'Swimmer-v5':5e6,
         ################
         #for gymnasium robotics
         'AntMaze_UMazeDense-v5':5e6,
         'PointMaze_LargeDense-v3':2e6,
         'FetchSlideDense-v3':5e6,
+        'FetchSlide-v3':5e6,
         'FrankaKitchen-v1':5e6,
         ######################
         'MountainCarContinuous-v0':5e6
@@ -457,7 +463,7 @@ if __name__ == '__main__':
                                            rho = rho)
     print(f"{domain} + code:{code}")
 
-    for s in range(seeds):
+    for s in range(0, seeds):
         main(seed = s, 
              horizon=horizon, 
              timesteps=timesteps, 

@@ -10,13 +10,16 @@ CODES_MAP={'code: 0':'baseline',
            'code: 21': 'ADEU+im',
            'code: 6': 'ADEU+ensemble',
            
-           'code: 1': 'ADEU'}
+           'code: 1': 'ADEU',
+            'code: 11': 'sADEU',
+           'code: 12': 'sADEU + unc.'
+           }
 
 
 def mean_values(df, codes):
     values = {}
-    #extended_codes = list([c+' - mean conflicts per episode' for c in codes])
-    extended_codes = list([c+' - conflicts over numebr of unique states visisted per episode' for c in codes])
+    extended_codes = list([c+' - mean conflicts per episode' for c in codes])
+    #extended_codes = list([c+' - conflicts over numebr of unique states visisted per episode' for c in codes])
     for i,c in enumerate(extended_codes):
         rewards = df[c]
         rewards = exponential_smoothing(y_values=rewards, x_values=df['Step'], smoothing_param=0.0)
@@ -95,10 +98,14 @@ def exponential_smoothing(y_values, x_values, smoothing_param=0, viewport_scale=
     
 
 if __name__=='__main__':
-    file = 'wandb_results/safety_frozen_lake_conflicts_over_states.csv'
+    domain = 'safety_frozen_lake'
+    #file = f'aaai_wandb_results/{domain}_cumulative_rewards.csv'
+    file = f'aaai_wandb_results/{domain}_conflicts.csv'
+    
     # Load the CSV file into a DataFrame
     df = pd.read_csv(file)
-    codes = ['code: 0', 'code: 2', 'code: 5',  'code: 1' ]
+    codes = ['code: 0', 'code: 2', 'code: 5',  'code: 1', 'code: 11', 'code: 12' ]
+
     values = mean_values(df, codes)
     print_results(results = values)
     print('______________________________')
