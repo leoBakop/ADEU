@@ -4,6 +4,80 @@ from torch.distributions import MultivariateNormal
 import torch.nn.functional as F
 from torchrl.modules import NoisyLinear
 
+'''
+the following three classes (core and head) are responsible for generating an Bootstrap DQN ensemble
+'''
+
+def weights_init(m):
+    """custom weights initialization"""
+    classtype = m.__class__
+    if classtype == nn.Linear or classtype == nn.Conv2d:
+        print("default init")
+        #m.weight.data.normal_(0.0, 0.02)
+        #m.bias.data.fill_(0)
+    elif classtype == nn.BatchNorm2d:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
+    else:
+        print('%s is not initialized.' %classtype)
+
+class CoreNet(nn.Module):
+    def __init__(self, num_channels=4):
+        super(CoreNet, self).__init__()
+        self.num_channels = num_channels
+        # params from ddqn appendix
+        self.conv1 = nn.Conv2d(self.num_channels, 32, 8, 4)
+        self.conv2 = nn.Conv2d(32, 64, 4, 2)
+        self.conv3 = nn.Conv2d(64, 64, 3, 1)
+        self.conv1.apply(weights_init)
+        self.conv2.apply(weights_init)
+        self.conv3.apply(weights_init)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        # size after conv3
+        reshape = 64*7*7
+        x = x.view(-1, reshape)
+        return x
+    
+class HeadNet(nn.Module):
+    def __init__(self, n_actions=4):
+        super(HeadNet, self).__init__()
+        mult = 64*7*7
+        self.fc1 = nn.Linear(mult, 512)
+        self.fc2 = nn.Linear(512, n_actions)
+        self.fc1.apply(weights_init)
+        self.fc2.apply(weights_init)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
+class EnsembleNet(nn.Module):
+    def __init__(self, n_ensemble, n_actions, num_channels):
+        super(EnsembleNet, self).__init__()
+        self.core_net = CoreNet(num_channels=num_channels)
+        self.net_list = nn.ModuleList([HeadNet(n_actions=n_actions) for k in range(n_ensemble)])
+
+    def _core(self, x):
+        return self.core_net(x)
+
+    def _heads(self, x):
+        return [net(x) for net in self.net_list]
+
+    def forward(self, x, k=None):
+        if k is not None:
+            return self.net_list[k](self.core_net(x))
+        else:
+            core_cache = self._core(x)
+            net_heads = self._heads(core_cache)
+            return net_heads
+
+
+
 
 class DeepNAF(nn.Module):
     def __init__(self, state_size, action_size, layer_size_1, layer_size_2, seed,device, c = 1, max_speed = 1):

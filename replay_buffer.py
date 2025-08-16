@@ -16,7 +16,7 @@ class ReplayBuffer:
         ======
             buffer_size (int): maximum size of buffer
             batch_size (int): size of each training batch
-            seed (int): random seed
+            device (torch.device)
         """
         self.device = device
         self.memory = deque(maxlen=buffer_size)  
@@ -53,6 +53,30 @@ class ReplayBuffer:
         """Return the current size of internal memory."""
         return len(self.memory)
 
+
+class Ensemble_Buffer(ReplayBuffer):
+    def __init__(self, buffer_size, batch_size, device, beta,K):
+        super().__init__(buffer_size, batch_size, device, store_intrisic = False)
+        self.beta = beta
+        self.K = K
+
+    def add(self, state, action, reward, next_state, done):
+        mask = np.random.binomial(1, self.beta, self.K)
+        self.memory.append([state, action, reward, next_state, done,mask])
+        return
+    
+    def sample(self):
+        if(len(self.memory)<self.batch_size): return False
+        experiences = random.sample(self.memory, k=self.batch_size)
+
+        states = torch.from_numpy(np.stack([e[0] for e in experiences if e is not None])).float().to(self.device)
+        actions = torch.from_numpy(np.vstack([e[1] for e in experiences if e is not None])).long().to(self.device)
+        rewards = torch.from_numpy(np.vstack([e[2] for e in experiences if e is not None])).float().to(self.device)
+        next_states = torch.from_numpy(np.stack([e[3] for e in experiences if e is not None])).float().to(self.device)
+        dones = torch.from_numpy(np.vstack([e[4] for e in experiences if e is not None]).astype(np.uint8)).float().to(self.device)
+        masks = torch.from_numpy(np.vstack([e[5] for e in experiences if e is not None])).float().to(self.device)
+        return (states, actions, rewards, next_states, dones, masks)
+        
 
 class Priorized_Experience_Replay():
     def __init__(self,buffer_size, batch_size, device, offset):

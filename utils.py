@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+from scipy import stats  # mode function
+
 #methods that will simulate the sumo environment
 #this code was originally written in sumo_env.py and
 #just copied in order to achiece compatibllity
@@ -159,3 +161,20 @@ def make_observation_franz_kitchen(observation):
     desired_goal = np.concatenate([ag for ag in observation['desired_goal'].values()])
     retval = np.concatenate([new_obs,achieved_goal,desired_goal])
     return retval
+
+
+def normilize_state_atari(state):
+    print('to do')
+    return state
+
+
+def majority_vote_action(q_heads:np.array):
+        """
+        q_heads: np.array of shape (n_heads, n_actions)
+                Each row is Q-values from one head for the current state.
+        """
+        
+        actions = [np.argmax(q) for q in q_heads]
+        values, counts = np.unique(actions, return_counts=True)
+        action = values[np.argmax(counts)]
+        return action
