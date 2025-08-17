@@ -55,7 +55,7 @@ class BootDQN():
 
 
     def get_action(self, state, active_head):
-        state = state.to(self.device)
+        state = torch.from_numpy(state).to(self.device)
         state = normilize_state_atari(state)
         qs = self.policy_net(x = state, k = active_head).detach().cpu().numpy()
         action = np.argmax(qs)
@@ -95,8 +95,11 @@ class BootDQN():
                 next_q_vals = next_q_target_vals[k].data
                 
                 next_actions = next_q_policy_vals[k].data.max(1, True)[1]
-                next_qs = next_q_vals.gather(1, next_actions).squeeze(1)
+                next_qs = next_q_vals.gather(1, next_actions)
                 
+                next_qs = ensure_flat(next_qs)
+                rewards = ensure_flat(rewards)
+                dones = ensure_flat(dones)
 
                 preds = q_policy_vals[k].gather(1, actions).squeeze(1)
                 targets = rewards + self.gamma * next_qs * (1-dones)
@@ -116,7 +119,18 @@ class BootDQN():
         self.opt.step()
         return np.mean(losses)
         
-
+def ensure_flat(x: torch.Tensor) -> torch.Tensor:
+    """
+    Ensures x has shape (N,) instead of (N,1).
+    If already (N,), nothing happens.
+    If (N,1), squeeze last dim.
+    """
+    if x.ndim == 2 and x.shape[1] == 1:
+        return x.squeeze(1)   # (N,1) -> (N,)
+    elif x.ndim == 1:
+        return x              # already (N,)
+    else:
+        raise ValueError(f"Unexpected shape {x.shape}, expected (N,) or (N,1).")
 
     
     
