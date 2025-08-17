@@ -196,6 +196,14 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     agent_params['networks_uncertainty'] = UNCERTAINTY
     agent_params['pretraining_time'] = pretraining
     agent_params['total_timesteps'] = total_timesteps
+
+
+    if code == 6: #this is used only to seperate the adeu+ensemble with rho = 0 and rhos = 0.1
+        filename+='/rho0/'
+        if not os.path.exists(filename+'/stored_data'):
+            os.makedirs(filename+'/stored_data')
+
+
     store(filename, mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
     
     if not comb or ucb: store_network(agent=agent, path = filename)
@@ -449,7 +457,7 @@ if __name__ == '__main__':
 
         
 
-    seeds = 10
+    seeds = 20
     
     mean_evaluation_rewards = []
     code = code_creation(adaptive_exploration=ade, 
@@ -463,7 +471,7 @@ if __name__ == '__main__':
                                            rho = rho)
     print(f"{domain} + code:{code}")
 
-    for s in range(0, seeds):
+    for s in range(10, seeds):
         main(seed = s, 
              horizon=horizon, 
              timesteps=timesteps, 
