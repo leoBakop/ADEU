@@ -10,9 +10,9 @@ torch.set_num_threads(2)
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from utils import normilize_state_atari, majority_vote_action
 import numpy as np
 from replay_buffer import Ensemble_Buffer
+from atari_utils import *
 
 class BootDQN():
 
@@ -50,20 +50,34 @@ class BootDQN():
         self.head_start = head_start
         self.steps = 0 #counts the total steps
         self.opt = optim.Adam(self.policy_net.parameters(), lr=learning_rate)
-
+        self.current_head = np.random.choice(self.K, size = 1)[0]
         self.buffer = Ensemble_Buffer(buffer_size, batch_size, device, beta, K = self.K)
 
 
-    def get_action(self, state, active_head):
+    def get_action(self, state):
+        '''
+        A method that uses as an input a normilized state and
+        returns an action for exploration. In Bootstrap DQN this
+        action is greedily selected by the currevt head
+        '''
+        #warmup action 
+        if self.steps < self.head_start:
+            return np.random.choice(self.num_actions, size = 1)[0]
         state = torch.from_numpy(state).to(self.device)
-        state = normilize_state_atari(state)
-        qs = self.policy_net(x = state, k = active_head).detach().cpu().numpy()
+        qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
         action = np.argmax(qs)
         return action
 
     def get_clear_action(self, state):
+        '''
+        A method that uses as an input a normilized state and
+        returns an action for evaluation. In Bootstrap DQN this
+        action is the result of the majority voting
+        between all heads.
+        '''
+        if self.steps < self.head_start:
+            return np.random.choice(self.num_actions, size = 1)[0]
         state = state.to(self.device)
-        state = normilize_state_atari(state)
         q_heads = self.policy_net(x = state)
         q_heads = [t.detach().cpu().numpy() for t in q_heads]
         action = majority_vote_action(q_heads)
@@ -119,6 +133,88 @@ class BootDQN():
         self.opt.step()
         return np.mean(losses)
         
+
+
+    def reset(self, ):
+        self.current_head = np.random.choice(self.K, size = 1)[0]
+
+
+    def save(self, filename):
+        torch.save(self.policy_net.state_dict(), filename + "_policy_network")
+        torch.save(self.opt.state_dict(), filename + "_policy_network_optimizer")
+        
+class DQN(BootDQN):
+    def __init__(self, 
+                 K, 
+                 num_actions, 
+                 num_channels, 
+                 learning_rate, 
+                 device, 
+                 buffer_size, 
+                 batch_size, 
+                 beta, 
+                 train_frequency, 
+                 target_update, 
+                 head_start,
+                 #for the Bpolztamnn exploration,
+                 exploration_duration,
+                 initial_tau = 1_000,
+                 final_tau = 0.5):
+        '''
+        DQN is a special case of BootDQN. To enhance exploration, we also use the Boltzmann exploration.
+        Hence, some more arguments are required to set up the Boltzmann exploration
+        '''
+        super().__init__(   K=1,
+                            num_actions=num_actions, 
+                            num_channels = num_channels, 
+                            learning_rate = learning_rate, 
+                            device = device, 
+                            buffer_size = buffer_size, 
+                            batch_size = batch_size, 
+                            beta = 1, 
+                            train_frequency=train_frequency, 
+                            target_update=target_update, 
+                            head_start = head_start)
+
+        self.exploration_duration = exploration_duration
+        self.initial_tau = initial_tau
+        self.final_tau = final_tau
+        self.temperature = np.linspace(self.initial_tau, self.final_tau, self.exploration_duration)
+
+    
+    def get_action(self, state):    
+        '''
+        A method that uses as an input a normilized state and
+        returns an action for exploration. In Bootstrap DQN this
+        action is greedily selected by the currevt head
+        '''
+        #warmup action 
+        if self.steps < self.head_start:
+            return np.random.choice(self.num_actions, size = 1)[0]
+        state = torch.from_numpy(state).to(self.device)
+        qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
+        qs = qs.reshape(-1)
+        tau = self.temperature[self.steps if self.steps < self.temperature.shape[0] else -1]
+        probs = np.exp(qs/tau)
+        probs/=np.sum(probs)
+        action = np.random.choice(self.num_actions, p = probs, size = 1)[0]
+        return action
+
+
+    def get_clear_action(self, state):
+        '''
+        return the action fpr the evaluation. In DQN, this action is the one
+        that maximizes the Q function
+        '''
+        if self.steps < self.head_start:
+            return np.random.choice(self.num_actions, size = 1)[0]
+        state = torch.from_numpy(state).to(self.device)
+        qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
+        return np.argmax(qs)
+
+
+
+
 def ensure_flat(x: torch.Tensor) -> torch.Tensor:
     """
     Ensures x has shape (N,) instead of (N,1).
