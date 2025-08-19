@@ -70,7 +70,7 @@ def main(domain,
 
     #aent construction
     if code == -1:
-        agents_parameters['initial_tau'] = 1_000
+        agents_parameters['initial_tau'] = 100
         agents_parameters['final_tau'] = 0.5
         agents_parameters['exploration_duration'] = int(horizon/1.5)
         agent = DQN(**agents_parameters)

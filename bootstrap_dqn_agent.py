@@ -160,7 +160,8 @@ class DQN(BootDQN):
                  #for the Bpolztamnn exploration,
                  exploration_duration,
                  initial_tau = 1_000,
-                 final_tau = 0.5):
+                 final_tau = 0.5,
+                 epsilon_greedy = True):
         '''
         DQN is a special case of BootDQN. To enhance exploration, we also use the Boltzmann exploration.
         Hence, some more arguments are required to set up the Boltzmann exploration
@@ -180,7 +181,12 @@ class DQN(BootDQN):
         self.exploration_duration = exploration_duration
         self.initial_tau = initial_tau
         self.final_tau = final_tau
-        self.temperature = np.linspace(self.initial_tau, self.final_tau, self.exploration_duration)
+        self.epsilon_greedy = epsilon_greedy
+        if self.epsilon_greedy:
+            self.epsilon = np.linspace(1, 0.05, self.exploration_duration)
+        
+        else:
+            self.temperature = np.linspace(self.initial_tau, self.final_tau, self.exploration_duration)
 
     
     def get_action(self, state):    
@@ -192,9 +198,19 @@ class DQN(BootDQN):
         #warmup action 
         if self.steps < self.head_start:
             return np.random.choice(self.num_actions, size = 1)[0]
+        
+        if self.epsilon_greedy:
+            eps = self.epsilon[self.steps if self.steps < self.epsilon.shape[0] else -1]
+            if  np.random.rand() < eps:
+                #return a random action
+                return np.random.choice(self.num_actions, size = 1)[0]
+            else:
+                return self.get_clear_action(state)
+        #otherwise, we have boltzamm exploration
         state = torch.from_numpy(state).to(self.device)
         qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
         qs = qs.reshape(-1)
+        
         tau = self.temperature[self.steps if self.steps < self.temperature.shape[0] else -1]
         probs = np.exp(qs/tau)
         probs/=np.sum(probs)
