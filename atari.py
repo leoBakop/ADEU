@@ -44,8 +44,7 @@ def main(domain,
     set_seed(seed)
     debug = False
     #environment
-    horizon = int(50e6)
-    horizon = int(100_000)
+    horizon = int(20e6)
     gym.register_envs(ale_py)
     env = gym.make(domain, repeat_action_probability = 0.25, max_episode_steps=timesteps)
     env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
