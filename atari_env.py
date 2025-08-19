@@ -27,6 +27,10 @@ class AtariEnv(Wrapper):
                 trunc = True
 
         frames = stack_frames(frames)
+        if rewards == 0:
+            return frames, rewards, trunc, info
+        
+        rewards = +1 if rewards > 0 else -1
         return frames, rewards, trunc, info
     
     

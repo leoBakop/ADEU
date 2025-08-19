@@ -32,6 +32,7 @@ class BootDQN():
         self.policy_net = EnsembleNet(n_ensemble=K,
                                       n_actions=num_actions,
                                       num_channels=num_channels).to(device)
+        
         self.target_net = EnsembleNet(n_ensemble=K,
                                       n_actions=num_actions,
                                       num_channels=num_channels).to(device)
@@ -62,10 +63,10 @@ class BootDQN():
         '''
         #warmup action 
         if self.steps < self.head_start:
-            return np.random.choice(self.num_actions, size = 1)[0]
+            return np.random.choice(self.num_actions, size = 1)[0] #in that way we do not allow the agent to use the do nothing action
         state = torch.from_numpy(state).to(self.device)
         qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
-        action = np.argmax(qs)
+        action = np.argmax(qs) 
         return action
 
     def get_clear_action(self, state):

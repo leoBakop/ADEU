@@ -46,7 +46,7 @@ def main(domain,
     #environment
     horizon = int(20e6)
     gym.register_envs(ale_py)
-    env = gym.make(domain, repeat_action_probability = 0.25, max_episode_steps=timesteps)
+    env = gym.make(domain, repeat_action_probability = 0.25, max_episode_steps=timesteps,)# render_mode = 'human')
     env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
     #agent
     if torch.cuda.is_available(): device = torch.device("cuda")
@@ -80,6 +80,7 @@ def main(domain,
     wandb_session(domain = domain, code=code, debug = debug, rho = rho, name = name)
     loss = 0
     rewards = 0
+    noop = 0
     print( '----------------------------------------')
     print( '-----begining of the training process---')
     print(f'-----this agent will run in {device}----')
@@ -91,12 +92,19 @@ def main(domain,
 
         if t%evaluation_every == 0:
             cumulative_evaluation_reward = evaluate(agent, domain, timesteps, seed, evaluation_episodes=30)
-            wandb.log({'Cumulative episodic reward':cumulative_evaluation_reward})
-            wandb.log({'mean loss during training': loss/evaluation_every})
-            wandb.log({'mean training reward': rewards/evaluation_every})
+            wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
+                        'mean loss during training': loss/evaluation_every,
+                        'mean training reward': rewards/evaluation_every,
+                        'frequency of noop': noop 
+                        })
+
             rewards = 0
             loss = 0
+            noop = 0
         action = agent.get_action(obs)
+
+        noop = noop+1 if action == 0 else noop
+
         new_obs, reward, terminated, info = env.step(action)
         l = agent.step(state = obs,
                    action = action,
@@ -164,13 +172,13 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--DQN', action='store_true', default=True, help='Use the standard DQN')
-    parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
+    parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
+    parser.add_argument('--BDQN', action='store_true', default=True, help='Use bootstrap DQN')
     parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_ensemble', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
-    parser.add_argument('--dom', type=str, default='ALE/Breakout-v5', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
     parser.add_argument('--steps', type=int, default=10_000, help='what are the maximum timesteps per episode')
     parser.add_argument('--rho', type=float, default=.0, help='what are the maximum timesteps per episode')
     args = parser.parse_args()
