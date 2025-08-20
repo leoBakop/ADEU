@@ -73,6 +73,7 @@ def main(domain,
         agents_parameters['initial_tau'] = 100
         agents_parameters['final_tau'] = 0.5
         agents_parameters['exploration_duration'] = int(horizon/1.5)
+        agents_parameters['epsilon_greedy'] = True
         agent = DQN(**agents_parameters)
     if code == -2:
         agent = BootDQN(**agents_parameters)

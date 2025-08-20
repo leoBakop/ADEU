@@ -267,7 +267,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
                 agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = max_var)
                 mean_var_per_episode = 0
             keep_trajectory = ( seed == 0 and adaptive_exploration and KEEP_TRAJECTORY)
-            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(kwargs=kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 3, domain = domain, episode = episode, label = label, debug = debug, options = options, keep_trajectories=keep_trajectory)
+            tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(kwargs=kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 10, domain = domain, episode = episode, label = label, debug = debug, options = options, keep_trajectories=keep_trajectory)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
