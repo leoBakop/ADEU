@@ -38,6 +38,12 @@ class BootDQN():
                                       num_channels=num_channels).to(device)
         
         self.target_net.load_state_dict(self.policy_net.state_dict())
+        
+        self.variance = 0
+        # this will measure the steps of calculating the variance before update
+        # we are tracking this steps in a different variable than the self.steps
+        #since we will reset that at the begining of every evaluatino episode
+        self.steps_til_update = 0 
 
         self.beta = beta
         self.num_actions = num_actions
@@ -54,6 +60,24 @@ class BootDQN():
         self.current_head = np.random.choice(self.K, size = 1)[0]
         self.buffer = Ensemble_Buffer(buffer_size, batch_size, device, beta, K = self.K)
 
+    def update_variance(self, variance):    
+        '''method that keeps track of a running average
+        of the variance. In some algorithms (e.g., DQN BDQN etc)
+        this will be zero. However, in some other is usefull.'''
+
+        self.variance = (self.variance * self.steps_til_update + variance)/(self.steps_til_update + 1)
+        self.steps_til_update += 1
+        return
+    
+    def get_variance(self):
+        variance = self.variance
+        self.reset_variance()
+        return variance
+    
+    def reset_variance(self,):
+        self.variance = 0
+        self.steps_til_update = 0
+        return
 
     def get_action(self, state):
         '''
@@ -78,7 +102,7 @@ class BootDQN():
         '''
         if self.steps < self.head_start:
             return np.random.choice(self.num_actions, size = 1)[0]
-        state = state.to(self.device)
+        state = torch.from_numpy(state).to(self.device)
         q_heads = self.policy_net(x = state)
         q_heads = [t.detach().cpu().numpy() for t in q_heads]
         action = majority_vote_action(q_heads)
@@ -229,6 +253,56 @@ class DQN(BootDQN):
         qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
         return np.argmax(qs)
 
+
+
+class BootUCB(BootDQN):
+    def __init__(self, K, 
+                 num_actions, 
+                 num_channels, 
+                 learning_rate, 
+                 device, 
+                 buffer_size, 
+                 batch_size, 
+                 beta, 
+                 train_frequency, 
+                 target_update, 
+                 head_start,
+                 lambda_value):
+        super().__init__(K, 
+                         num_actions, 
+                         num_channels, 
+                         learning_rate, 
+                         device, 
+                         buffer_size, 
+                         batch_size, 
+                         beta, 
+                         train_frequency, 
+                         target_update, 
+                         head_start)
+
+        self.lambda_value = lambda_value
+
+    def get_action(self, state):
+        if self.steps < self.head_start:
+            return np.random.choice(self.num_actions, size = 1)[0]
+        
+
+        state = torch.from_numpy(state).to(self.device)
+        qs = self.policy_net(x = state) #qs now is a list of torch.Tensors
+        
+        qs = torch.stack(qs, dim=0)  # shape: (10, 1, n_actions)
+        qs_mean = qs.mean(dim=0)      # shape: (1, n_actions)
+        qs_mean = qs_mean.squeeze(0)
+
+        qs_std = qs.std(dim=0)
+        qs_std = qs_std.squeeze(0)
+
+        upper_bound = (qs_mean + self.lambda_value*qs_std).detach().cpu().numpy()
+        action = np.argmax(upper_bound)
+        
+        self.update_variance(qs_std[action].detach().cpu().numpy())
+
+        return action
 
 
 

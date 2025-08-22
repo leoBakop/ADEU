@@ -44,7 +44,7 @@ def main(domain,
     set_seed(seed)
     debug = False
     #environment
-    horizon = int(20e6)
+    horizon = int(50)
     gym.register_envs(ale_py)
     env = gym.make(domain, repeat_action_probability = 0.25, max_episode_steps=timesteps,)# render_mode = 'human')
     env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
@@ -63,8 +63,8 @@ def main(domain,
                 'beta':0.99, 
                 'train_frequency':4, 
                 'target_update':10_000,
-                'head_start':50_000,
-                #'head_start' : 64
+                #'head_start':50_000,
+                'head_start' : 64
     }
 
 
@@ -77,28 +77,35 @@ def main(domain,
         agent = DQN(**agents_parameters)
     if code == -2:
         agent = BootDQN(**agents_parameters)
+    if code == -3:
+        agents_parameters['lambda_value'] = 0.1
+        agent = BootUCB(**agents_parameters)
+
     name = reverse_code(code)+f', seed {seed}'
     wandb_session(domain = domain, code=code, debug = debug, rho = rho, name = name)
     loss = 0
     rewards = 0
     noop = 0
+    cumm_eval_rewards = []
     print( '----------------------------------------')
     print( '-----begining of the training process---')
     print(f'-----this agent will run in {device}----')
     print( '----------------------------------------')
     obs, info = env.reset(seed=seed)
     evaluation_every = int(horizon//20)
-
+    
     for t in tqdm(range(horizon)):
 
         if t%evaluation_every == 0:
             cumulative_evaluation_reward = evaluate(agent, domain, timesteps, seed, evaluation_episodes=30)
+            variance = agent.get_variance()
             wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
                         'mean loss during training': loss/evaluation_every,
                         'mean training reward': rewards/evaluation_every,
-                        'frequency of noop': noop 
+                        'frequency of noop': noop ,
+                        'mean variance' : variance
                         })
-
+            cumm_eval_rewards.append(cumulative_evaluation_reward)
             rewards = 0
             loss = 0
             noop = 0
@@ -122,11 +129,13 @@ def main(domain,
 
         #env.render()
     env.close()
+    path = f"./experiments/ATARI/{domain}/{name}/seed_{seed}"
+    store(path, agent, cumm_eval_rewards, agents_parameters)
 
 
 
-def store(path,agent:BootDQN, label,seed, cumulative_rewards, agent_parameters):
-    path = f"./experiments/ATARI/{domain}/{label}/seed_{seed}"
+def store(path,agent:BootDQN, cumulative_rewards, agent_parameters):
+    
     if not os.path.exists(path+'/stored_data'):
         os.makedirs(path+'/stored_data')
     np.save(path+'/stored_data/cumulative_rewards.npy', cumulative_rewards)
@@ -174,8 +183,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
     parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
-    parser.add_argument('--BDQN', action='store_true', default=True, help='Use bootstrap DQN')
-    parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
+    parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
+    parser.add_argument('--UCB', action='store_true', default=True, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_ensemble', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
