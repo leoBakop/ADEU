@@ -45,6 +45,7 @@ def main(domain,
     debug = False
     #environment
     horizon = int(20e6)
+    #horizon = int(10e4)
     gym.register_envs(ale_py)
     env = gym.make(domain, repeat_action_probability = 0.25, max_episode_steps=timesteps,)# render_mode = 'human')
     env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
@@ -70,16 +71,22 @@ def main(domain,
 
     #aent construction
     if code == -1:
-        agents_parameters['initial_tau'] = 100
+        agents_parameters['initial_tau'] = 10
         agents_parameters['final_tau'] = 0.5
-        agents_parameters['exploration_duration'] = int(horizon/1.5)
-        agents_parameters['epsilon_greedy'] = True
+        agents_parameters['exploration_duration'] = int(0.65*horizon)
+        agents_parameters['epsilon_greedy'] = False
         agent = DQN(**agents_parameters)
     if code == -2:
         agent = BootDQN(**agents_parameters)
     if code == -3:
         agents_parameters['lambda_value'] = 0.1
         agent = BootUCB(**agents_parameters)
+
+    if code == 3:
+        agents_parameters['lambda_value'] = 10
+        agents_parameters['rho'] = 0.1
+        agents_parameters['initial_tau'] = 10
+        agent = Adeu_Std(**agents_parameters)
 
     name = reverse_code(code)+f', seed {seed}'
     wandb_session(domain = domain, code=code, debug = debug, rho = rho, name = name)
@@ -134,11 +141,14 @@ def main(domain,
 
 
 
-def store(path,agent:BootDQN, cumulative_rewards, agent_parameters):
+def store(path,agent:BootDQN, cumulative_rewards, agent_parameters:dict):
     
     if not os.path.exists(path+'/stored_data'):
         os.makedirs(path+'/stored_data')
     np.save(path+'/stored_data/cumulative_rewards.npy', cumulative_rewards)
+
+    if agent_parameters.get('lambda_value', -1) != -1:
+        agent_parameters['lambda_value'] == agent.get_lambda_value()
 
     full_path = path + "/hyperparameters.txt"
 
@@ -167,12 +177,14 @@ def code_creation(agent_args):
     if agent_args['dqn']: return -1
     if agent_args['bdqn']: return -2
     if agent_args['ucb']: return -3
+    if agent_args['adeu_std']: return 3
     return 0    
 
 def reverse_code(code):
     if code == -1: return 'dqn'
     if code == -2: return 'bdqn'
     if code == -3: return 'ucb'
+    if code == 3: return 'adeu_std'
     return None
 if __name__ == '__main__':
 
@@ -185,7 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
     parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
     parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
-    parser.add_argument('--adeu_ensemble', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
+    parser.add_argument('--adeu_std', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
@@ -197,6 +209,7 @@ if __name__ == '__main__':
     dqn = args.DQN
     bdqn = args.BDQN
     ucb = args.UCB
+    adeu_std = args.adeu_std
 
     rho = args.rho
 
@@ -206,7 +219,8 @@ if __name__ == '__main__':
     agent_args = {
         'dqn': dqn,
         'bdqn': bdqn,
-        'ucb': ucb
+        'ucb': ucb,
+        'adeu_std': adeu_std
     }
 
 

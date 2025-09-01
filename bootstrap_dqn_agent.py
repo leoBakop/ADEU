@@ -13,6 +13,7 @@ import torch.optim as optim
 import numpy as np
 from replay_buffer import Ensemble_Buffer
 from atari_utils import *
+from tqdm import tqdm
 
 class BootDQN():
 
@@ -306,6 +307,92 @@ class BootUCB(BootDQN):
 
 
 
+class Adeu_Std(BootUCB):
+    def __init__(self, K, 
+                 num_actions, 
+                 num_channels, 
+                 learning_rate, 
+                 device, 
+                 buffer_size, 
+                 batch_size, 
+                 beta, 
+                 train_frequency, 
+                 target_update, 
+                 head_start,
+                 lambda_value,
+                 rho,
+                 initial_tau):
+        
+        super().__init__(K, 
+                         num_actions, 
+                         num_channels, 
+                         learning_rate, 
+                         device, 
+                         buffer_size, 
+                         batch_size, 
+                         beta, 
+                         train_frequency, 
+                         target_update, 
+                         head_start,
+                         lambda_value,
+                         )
+        self.rho = rho
+        self.initial_tau = initial_tau
+    def get_action(self, state):
+        
+        if self.steps < self.head_start:
+            self.fix_lambda(state)
+            return np.random.choice(self.num_actions, size = 1)[0]
+        
+        if self.steps == self.head_start:
+            self.lambda_value = float(self.lambda_value)
+            tqdm.write(f'the final lambda value for that run is {round(self.lambda_value, ndigits=3)}')
+
+        if np.random.rand() < self.rho:
+            return np.random.choice(self.num_actions, size = 1)[0]
+
+        state = torch.from_numpy(state).to(self.device)
+        qs = self.policy_net(x = state) #qs now is a list of torch.Tensors
+        
+        qs = torch.stack(qs, dim=0)  # shape: (10, 1, n_actions)
+        qs_mean = qs.mean(dim=0)      # shape: (1, n_actions)
+        qs_mean = qs_mean.squeeze(0)
+
+        qs_std = qs.std(dim=0)
+        qs_std = qs_std.squeeze(0)
+
+        #I can chane this max. I should even consider leaving it as qs_mean/qs_std allowing to keep track of differents tds for each action, so allowing for a f(s,a)
+        variance = self.lambda_value*torch.sqrt(torch.max(qs_std))
+        probabilities = (qs_mean/variance).detach().cpu().numpy()
+        probabilities = np.exp(probabilities)
+        probabilities/=np.sum(probabilities)
+        if np.max(probabilities)  > 0.4:
+            tqdm.write('exploitation')
+
+        action = np.random.choice(self.num_actions, size=1, p = probabilities)[0]
+        
+        self.update_variance(variance.detach().cpu().numpy())
+
+        return action
+
+    def fix_lambda(self, state):
+        #I will calculare the mean std in order to fine tune lambda
+        state = torch.from_numpy(state).to(self.device)
+        
+        qs = self.policy_net(x = state)
+        qs = torch.stack(qs, dim=0)  # shape: (10, 1, n_actions)
+        qs_std = qs.std(dim=0)
+        qs_std = qs_std.squeeze(0)
+
+        variance = torch.sqrt(torch.max(qs_std)).detach().cpu().numpy()
+        #Ideally I would like the maximum variance at the early stages of the training (i.e., head start)
+        #to be around self.initial_tau
+        l = self.initial_tau/variance
+        self.lambda_value = (self.lambda_value*self.steps + l)/(self.steps + 1 )
+        return 
+
+    def get_lambda_value(self, ):
+        return self.lambda_value
 def ensure_flat(x: torch.Tensor) -> torch.Tensor:
     """
     Ensures x has shape (N,) instead of (N,1).
