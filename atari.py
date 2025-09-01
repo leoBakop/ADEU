@@ -44,7 +44,7 @@ def main(domain,
     set_seed(seed)
     debug = False
     #environment
-    horizon = int(50)
+    horizon = int(20e6)
     gym.register_envs(ale_py)
     env = gym.make(domain, repeat_action_probability = 0.25, max_episode_steps=timesteps,)# render_mode = 'human')
     env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
@@ -63,8 +63,8 @@ def main(domain,
                 'beta':0.99, 
                 'train_frequency':4, 
                 'target_update':10_000,
-                #'head_start':50_000,
-                'head_start' : 64
+                'head_start':50_000,
+                #'head_start' : 64
     }
 
 
@@ -92,7 +92,7 @@ def main(domain,
     print(f'-----this agent will run in {device}----')
     print( '----------------------------------------')
     obs, info = env.reset(seed=seed)
-    evaluation_every = int(horizon//20)
+    evaluation_every = int(horizon//30)
     
     for t in tqdm(range(horizon)):
 
@@ -176,7 +176,7 @@ def reverse_code(code):
     return None
 if __name__ == '__main__':
 
-    seeds = 3
+    seeds = 1
 
 
 
@@ -184,7 +184,7 @@ if __name__ == '__main__':
     # Define hyperparameters as command-line arguments
     parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
     parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
-    parser.add_argument('--UCB', action='store_true', default=True, help='Use UCB built on top of BDQN')
+    parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_ensemble', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
