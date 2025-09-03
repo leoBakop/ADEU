@@ -48,7 +48,7 @@ class BootDQN():
 
         self.beta = beta
         self.num_actions = num_actions
-        self.clip_gradient = 5
+        self.clip_gradient = 1
         self.device = device
         self.gamma = 0.99
         self.train_frequency = train_frequency

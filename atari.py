@@ -57,7 +57,8 @@ def main(domain,
                 'K':10,
                 'num_actions':env.action_space.n,
                 'num_channels':4,
-                'learning_rate':6.25e-6,
+                #'learning_rate':6.25e-6,
+                'learning_rate':2.5e-4, #that is the learning rate used in BDQN
                 'device':device,
                 'buffer_size':int(1e5),
                 'batch_size':32,
@@ -71,7 +72,7 @@ def main(domain,
 
     #aent construction
     if code == -1:
-        agents_parameters['initial_tau'] = 10
+        agents_parameters['initial_tau'] = 3
         agents_parameters['final_tau'] = 0.5
         agents_parameters['exploration_duration'] = int(0.65*horizon)
         agents_parameters['epsilon_greedy'] = False
