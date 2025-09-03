@@ -47,7 +47,8 @@ def main(domain,
     horizon = int(20e6)
     #horizon = int(10e4)
     gym.register_envs(ale_py)
-    env = gym.make(domain, repeat_action_probability = 0.25, max_episode_steps=timesteps,)# render_mode = 'human')
+    #we are setting the frameskip equal to 1 (so in practice no frameskip). We then apply it using the Wrapper
+    env = gym.make(domain, repeat_action_probability = 0.25, frameskip = 1,  max_episode_steps=timesteps,)# render_mode = 'human')
     env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
     #agent
     if torch.cuda.is_available(): device = torch.device("cuda")
@@ -195,7 +196,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
+    parser.add_argument('--DQN', action='store_true', default=True, help='Use the standard DQN')
     parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
     parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_std', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')

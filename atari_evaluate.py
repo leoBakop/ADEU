@@ -33,6 +33,6 @@ def evaluate(agent:BootDQN, domain, timesteps, seed, evaluation_episodes = 30):
 
 def make_environment(domain, timesteps):
     gym.register_envs(ale_py)
-    env = gym.make(domain, repeat_action_probability = .0, max_episode_steps=timesteps)
+    env = gym.make(domain, repeat_action_probability = .0, max_episode_steps=timesteps, frameskip = 1)
     env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
     return env
