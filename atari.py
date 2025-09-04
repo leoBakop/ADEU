@@ -14,7 +14,7 @@ from bootstrap_dqn_agent import *
 from atari_evaluate import evaluate
 
 
-def wandb_session(domain:str , rho, name = None, code = 0, debug = False,):
+def wandb_session(domain:str , rho, lr, name = None, code = 0, debug = False, ):
     # start a new wandb run to track this script
     domain = domain.replace("/", "_")
     project = f"Neurips-2025| Atari, Adaptive Exploration {domain}"
@@ -28,6 +28,7 @@ def wandb_session(domain:str , rho, name = None, code = 0, debug = False,):
         config={
         "code":code,
         'rho':rho,
+        'learning_rate': lr,
         }
     )
     
@@ -67,15 +68,17 @@ def main(domain,
                 'train_frequency':4, 
                 'target_update':10_000,
                 'head_start':50_000,
-                #'head_start' : 64
+                #'head_start' : 64,
+                'gamma':0.99
     }
 
 
     #aent construction
     if code == -1:
-        agents_parameters['initial_tau'] = 3
-        agents_parameters['final_tau'] = 0.5
-        agents_parameters['exploration_duration'] = int(0.65*horizon)
+        maximum_reward = 1 #we now that from the Wrapper
+        agents_parameters['initial_tau'] = 1.5*maximum_reward/(1-agents_parameters['gamma']) #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
+        agents_parameters['final_tau'] = 0.01
+        agents_parameters['exploration_duration'] = int(0.5*horizon)
         agents_parameters['epsilon_greedy'] = False
         agent = DQN(**agents_parameters)
     if code == -2:
@@ -87,57 +90,17 @@ def main(domain,
     if code == 3:
         agents_parameters['lambda_value'] = 10
         agents_parameters['rho'] = 0.1
-        agents_parameters['initial_tau'] = 10
+        maximum_reward = 1 #we now that from the Wrapper
+        agents_parameters['initial_tau'] = 1.5*maximum_reward/(1-agents_parameters['gamma']) #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
         agent = Adeu_Std(**agents_parameters)
-
-    name = reverse_code(code)+f', seed {seed}'
-    wandb_session(domain = domain, code=code, debug = debug, rho = rho, name = name)
-    loss = 0
-    rewards = 0
-    noop = 0
-    cumm_eval_rewards = []
-    print( '----------------------------------------')
-    print( '-----begining of the training process---')
-    print(f'-----this agent will run in {device}----')
-    print( '----------------------------------------')
-    obs, info = env.reset(seed=seed)
-    evaluation_every = int(horizon//50)
     
-    for t in tqdm(range(horizon)):
-
-        if t%evaluation_every == 0:
-            cumulative_evaluation_reward = evaluate(agent, domain, timesteps, seed, evaluation_episodes=30)
-            variance = agent.get_variance()
-            wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
-                        'mean loss during training': loss/evaluation_every,
-                        'mean training reward': rewards/evaluation_every,
-                        'frequency of noop': noop ,
-                        'mean variance' : variance
-                        })
-            cumm_eval_rewards.append(cumulative_evaluation_reward)
-            rewards = 0
-            loss = 0
-            noop = 0
-        action = agent.get_action(obs)
-
-        noop = noop+1 if action == 0 else noop
-
-        new_obs, reward, terminated, info = env.step(action)
-        l = agent.step(state = obs,
-                   action = action,
-                   reward = reward,
-                   next_state=new_obs,
-                   done = terminated)
-        loss+=l
-        rewards+=reward
-        obs = new_obs
-        #if info['lives'] == 0 and terminated:
-        if terminated:
-            obs, info = env.reset()
-            agent.reset()
-
-        #env.render()
-    env.close()
+    name = reverse_code(code)+f', seed {seed}'
+    wandb_session(domain = domain, code=code, debug = debug, rho = rho, name = name, lr = agents_parameters['learning_rate'])
+    agent, cumm_eval_rewards = run( seed, 
+                                    agent, 
+                                    env, 
+                                    horizon)
+    
     path = f"./experiments/ATARI/{domain}/{name}/seed_{seed}"
     store(path, agent, cumm_eval_rewards, agents_parameters)
 
@@ -159,6 +122,59 @@ def store(path,agent:BootDQN, cumulative_rewards, agent_parameters:dict):
             f.write(f"{key}: {value}\n")
 
     agent.save(path)
+
+def run(seed, agent:BootDQN, env:AtariEnv, horizon,):
+    
+    loss = 0
+    rewards = 0
+    episodes_till_evaluate = 1
+    noop = 0
+    cumm_eval_rewards = []
+    print( '----------------------------------------')
+    print( '-----begining of the training process---')
+    print(f'-----this agent will run in {device}----')
+    print( '----------------------------------------')
+    obs, info = env.reset(seed=seed)
+    evaluation_every = int(horizon//50)
+    
+    for t in tqdm(range(horizon)):
+        
+        if t%evaluation_every == 0:
+            cumulative_evaluation_reward = evaluate(agent, domain, timesteps, seed, evaluation_episodes=30)
+            variance = agent.get_variance()
+            wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
+                        'mean episodic loss during training': loss/episodes_till_evaluate,
+                        'mean episodic training reward': rewards/episodes_till_evaluate,
+                        'frequency of noop (episodic)': noop/episodes_till_evaluate,
+                        'mean variance at every timestep' : variance
+                        })
+            episodes_till_evaluate = 0
+            cumm_eval_rewards.append(cumulative_evaluation_reward)
+            rewards = 0
+            loss = 0
+            noop = 0
+
+        action = agent.get_action(obs)
+        noop = noop+1 if action == 0 else noop
+
+        new_obs, reward, terminated, info = env.step(action)
+        l = agent.step(state = obs,
+                action = action,
+                reward = reward,
+                next_state=new_obs,
+                done = terminated)
+        loss+=l
+        rewards+=reward
+        obs = new_obs
+        #if info['lives'] == 0 and terminated:
+        if terminated:
+            episodes_till_evaluate+=1
+            obs, info = env.reset()
+            agent.reset()
+
+        #env.render()
+    env.close()
+    return agent, cumm_eval_rewards
 
 def set_seed(seed):
     """

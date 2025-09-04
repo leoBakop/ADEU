@@ -28,7 +28,8 @@ class BootDQN():
                  beta, 
                  train_frequency, 
                  target_update,
-                 head_start):
+                 head_start,
+                 gamma):
         
         self.policy_net = EnsembleNet(n_ensemble=K,
                                       n_actions=num_actions,
@@ -50,7 +51,7 @@ class BootDQN():
         self.num_actions = num_actions
         self.clip_gradient = 1
         self.device = device
-        self.gamma = 0.99
+        self.gamma = gamma
         self.train_frequency = train_frequency
         self.K = K
         self.learning_rate = learning_rate
@@ -208,12 +209,11 @@ class DQN(BootDQN):
         self.final_tau = final_tau
         self.epsilon_greedy = epsilon_greedy
         if self.epsilon_greedy:
-            self.epsilon = np.linspace(1, 0.05, self.exploration_duration)
+            self.epsilon = np.linspace(1, 0.01, self.exploration_duration)
         
         else:
             self.temperature = np.linspace(self.initial_tau, self.final_tau, self.exploration_duration)
 
-    
     def get_action(self, state):    
         '''
         A method that uses as an input a normilized state and
@@ -226,6 +226,7 @@ class DQN(BootDQN):
         
         if self.epsilon_greedy:
             eps = self.epsilon[self.steps if self.steps < self.epsilon.shape[0] else -1]
+            self.update_variance(eps)
             if  np.random.rand() < eps:
                 #return a random action
                 return np.random.choice(self.num_actions, size = 1)[0]
@@ -237,6 +238,7 @@ class DQN(BootDQN):
         qs = qs.reshape(-1)
         
         tau = self.temperature[self.steps if self.steps < self.temperature.shape[0] else -1]
+        self.update_variance(tau)
         probs = np.exp(qs/tau)
         probs/=np.sum(probs)
         action = np.random.choice(self.num_actions, p = probs, size = 1)[0]
