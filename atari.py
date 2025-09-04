@@ -59,7 +59,7 @@ def main(domain,
                 'num_actions':env.action_space.n,
                 'num_channels':4,
                 #'learning_rate':6.25e-6,
-                'learning_rate':2.5e-4, #that is the learning rate used in BDQN
+                'learning_rate':5e-5,
                 'device':device,
                 'buffer_size':int(1e5),
                 'batch_size':32,
@@ -101,7 +101,7 @@ def main(domain,
     print(f'-----this agent will run in {device}----')
     print( '----------------------------------------')
     obs, info = env.reset(seed=seed)
-    evaluation_every = int(horizon//30)
+    evaluation_every = int(horizon//50)
     
     for t in tqdm(range(horizon)):
 
@@ -196,7 +196,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--DQN', action='store_true', default=True, help='Use the standard DQN')
+    parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
     parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
     parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_std', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
