@@ -189,6 +189,7 @@ class DQN(BootDQN):
                  train_frequency, 
                  target_update, 
                  head_start,
+                 gamma,
                  #for the Bpolztamnn exploration,
                  exploration_duration,
                  initial_tau = 1_000,
@@ -208,7 +209,8 @@ class DQN(BootDQN):
                             beta = 1, 
                             train_frequency=train_frequency, 
                             target_update=target_update, 
-                            head_start = head_start)
+                            head_start = head_start,
+                            gamma = gamma)
 
         self.exploration_duration = exploration_duration
         self.initial_tau = initial_tau
@@ -281,6 +283,7 @@ class BootUCB(BootDQN):
                  train_frequency, 
                  target_update, 
                  head_start,
+                 gamma,
                  lambda_value):
         super().__init__(K, 
                          num_actions, 
@@ -292,7 +295,8 @@ class BootUCB(BootDQN):
                          beta, 
                          train_frequency, 
                          target_update, 
-                         head_start)
+                         head_start,
+                         gamma)
 
         self.lambda_value = lambda_value
 

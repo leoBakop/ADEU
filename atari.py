@@ -54,6 +54,13 @@ def main(domain,
     #agent
     if torch.cuda.is_available(): device = torch.device("cuda")
     else: device = torch.device("cpu")
+    
+    print( '----------------------------------------')
+    print( '-----begining of the training process---')
+    print(f'-----this agent will run in {device}----')
+    print( '----------------------------------------')
+
+
     rho = 0 if code < 0 else rho
     agents_parameters = {
                 'K':10,
@@ -99,7 +106,8 @@ def main(domain,
     agent, cumm_eval_rewards = run( seed, 
                                     agent, 
                                     env, 
-                                    horizon)
+                                    horizon,
+                                    code)
     
     path = f"./experiments/ATARI/{domain}/{name}/seed_{seed}"
     store(path, agent, cumm_eval_rewards, agents_parameters)
@@ -130,10 +138,7 @@ def run(seed, agent:BootDQN, env:AtariEnv, horizon,code):
     episodes_till_evaluate = 1
     noop = 0
     cumm_eval_rewards = []
-    print( '----------------------------------------')
-    print( '-----begining of the training process---')
-    print(f'-----this agent will run in {device}----')
-    print( '----------------------------------------')
+    
     obs, info = env.reset(seed=seed)
     evaluation_every = int(horizon//100)
     
