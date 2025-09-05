@@ -123,7 +123,7 @@ def store(path,agent:BootDQN, cumulative_rewards, agent_parameters:dict):
 
     agent.save(path)
 
-def run(seed, agent:BootDQN, env:AtariEnv, horizon,):
+def run(seed, agent:BootDQN, env:AtariEnv, horizon,code):
     
     loss = 0
     rewards = 0
@@ -141,12 +141,14 @@ def run(seed, agent:BootDQN, env:AtariEnv, horizon,):
         
         if t%evaluation_every == 0:
             cumulative_evaluation_reward = evaluate(agent, domain, timesteps, seed, evaluation_episodes=30)
-            variance = agent.get_variance()
+            return_q = (code == -3 ) or (code == 3) #in case of the adeu std or the Bootucb I would like also to get the mean q value among the training
+            variance, q_mean = agent.get_variance(return_q)
             wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
                         'mean episodic loss during training': loss/episodes_till_evaluate,
                         'mean episodic training reward': rewards/episodes_till_evaluate,
                         'frequency of noop (episodic)': noop/episodes_till_evaluate,
-                        'mean variance at every timestep' : variance
+                        'mean variance at every timestep' : variance,
+                        'variance over greediness': variance/q_mean if q_mean!=0 else -1
                         })
             episodes_till_evaluate = 0
             cumm_eval_rewards.append(cumulative_evaluation_reward)

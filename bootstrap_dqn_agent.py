@@ -42,6 +42,7 @@ class BootDQN():
         self.target_net.load_state_dict(self.policy_net.state_dict())
         
         self.variance = 0
+        self.q_mean = 0
         # this will measure the steps of calculating the variance before update
         # we are tracking this steps in a different variable than the self.steps
         #since we will reset that at the begining of every evaluatino episode
@@ -62,22 +63,26 @@ class BootDQN():
         self.current_head = np.random.choice(self.K, size = 1)[0]
         self.buffer = Ensemble_Buffer(buffer_size, batch_size, device, beta, K = self.K)
 
-    def update_variance(self, variance):    
+    def update_variance(self, variance, q):    
         '''method that keeps track of a running average
         of the variance. In some algorithms (e.g., DQN BDQN etc)
         this will be zero. However, in some other is usefull.'''
 
         self.variance = (self.variance * self.steps_til_update + variance)/(self.steps_til_update + 1)
+        self.q_mean = (self.q_mean * self.steps_til_update + q)/(self.steps_til_update + 1)
         self.steps_til_update += 1
         return
     
-    def get_variance(self):
+    def get_variance(self, return_q = False):
         variance = self.variance
+        q_mean = self.q_mean
         self.reset_variance()
-        return variance
+        if return_q: return variance, q_mean
+        return variance, 0
     
     def reset_variance(self,):
         self.variance = 0
+        self.q_mean = 0
         self.steps_til_update = 0
         return
 
@@ -92,6 +97,7 @@ class BootDQN():
             return np.random.choice(self.num_actions, size = 1)[0] #in that way we do not allow the agent to use the do nothing action
         state = torch.from_numpy(state).to(self.device)
         qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
+        self.update_variance(variance = 0, q = 0)
         action = np.argmax(qs) 
         return action
 
@@ -214,6 +220,11 @@ class DQN(BootDQN):
         else:
             self.temperature = np.linspace(self.initial_tau, self.final_tau, self.exploration_duration)
 
+    def update_variance(self, variance):
+        return super().update_variance(variance, q = 0)
+    def get_variance(self, return_q=False):
+        return super().get_variance(return_q = False)
+
     def get_action(self, state):    
         '''
         A method that uses as an input a normilized state and
@@ -303,7 +314,7 @@ class BootUCB(BootDQN):
         upper_bound = (qs_mean + self.lambda_value*qs_std).detach().cpu().numpy()
         action = np.argmax(upper_bound)
         
-        self.update_variance(qs_std[action].detach().cpu().numpy())
+        self.update_variance(qs_std[action].detach().cpu().numpy(), qs_mean[action].detach().cpu().numpy())
 
         return action
 
@@ -373,7 +384,7 @@ class Adeu_Std(BootUCB):
 
         action = np.random.choice(self.num_actions, size=1, p = probabilities)[0]
         
-        self.update_variance(variance.detach().cpu().numpy())
+        self.update_variance(variance.detach().cpu().numpy(), qs_mean[action].detach().cpu().numpy())
 
         return action
 
