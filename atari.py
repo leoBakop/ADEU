@@ -135,7 +135,7 @@ def run(seed, agent:BootDQN, env:AtariEnv, horizon,code):
     print(f'-----this agent will run in {device}----')
     print( '----------------------------------------')
     obs, info = env.reset(seed=seed)
-    evaluation_every = int(horizon//50)
+    evaluation_every = int(horizon//100)
     
     for t in tqdm(range(horizon)):
         
