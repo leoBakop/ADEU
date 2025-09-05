@@ -83,7 +83,7 @@ def main(domain,
     #aent construction
     if code == -1:
         maximum_reward = 1 #we now that from the Wrapper
-        agents_parameters['initial_tau'] = 1.5*maximum_reward/(1-agents_parameters['gamma']) #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
+        agents_parameters['initial_tau'] = 1 #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
         agents_parameters['final_tau'] = 0.01
         agents_parameters['exploration_duration'] = int(0.5*horizon)
         agents_parameters['epsilon_greedy'] = False
@@ -98,7 +98,7 @@ def main(domain,
         agents_parameters['lambda_value'] = 10
         agents_parameters['rho'] = 0.1
         maximum_reward = 1 #we now that from the Wrapper
-        agents_parameters['initial_tau'] = 1.5*maximum_reward/(1-agents_parameters['gamma']) #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
+        agents_parameters['initial_tau'] = 1 #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
         agent = Adeu_Std(**agents_parameters)
     
     name = reverse_code(code)+f', seed {seed}'
@@ -219,7 +219,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
+    parser.add_argument('--DQN', action='store_true', default=True, help='Use the standard DQN')
     parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
     parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_std', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
