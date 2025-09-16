@@ -180,7 +180,7 @@ def create_graph_2(df, codes, domain, seeds):
         rewards = df[c+' - cumm_evaluation_reward']
         #min_rewards = 1.25 * ignore_outliers(min_rewards) #1.5 except humanoid and swimmer and walker  in which I set it to 1.25
         #max_rewards = 0.65 * ignore_outliers(max_rewards) #0.5 except humanoid and swimmer and walker (max 0.65) in which I set it to 0.85
-        variance = 0.5 * ignore_outliers(pd.Series(variance))
+        variance = 0.6 * ignore_outliers(pd.Series(variance))
         rewards = ignore_outliers(rewards)
         #rewards = pd.Series(rewards)
 
@@ -232,7 +232,7 @@ def get_variance(code, seeds, domain):
 
 if __name__=='__main__':
     # 'domain' variable refers to the aaai_wandb... path
-    domain = 'hopper'
+    domain = 'humanoid'
     seeds = 10
     path = 'aaai_wandb_results/'
     file = path+f'{domain}_cumulative_rewards.csv'

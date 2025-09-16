@@ -86,6 +86,8 @@ class BootDQN():
         self.steps_til_update = 0
         return
 
+    def get_lambda_value(self,):
+        return -1
     def get_action(self, state):
         '''
         A method that uses as an input a normilized state and

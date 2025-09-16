@@ -219,7 +219,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--DQN', action='store_true', default=True, help='Use the standard DQN')
+    parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
     parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
     parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_std', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
