@@ -220,26 +220,25 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
 
         if training_step % int(horizon*percentage) == 0:
             wandb.log({
-                    "timestep with max uncertanty": arg_var_per_episode[training_step -1 if training_step > 0 else 0],
-                    "max uncertanty": var_per_episode[training_step -1 if training_step > 0 else 0],
+                    "timestep with max uncertanty": arg_var_per_episode[episode -1 if training_step > 0 else 0],
+                    "max uncertanty": var_per_episode[episode -1 if training_step > 0 else 0],
                     'error of the rnd network': rnd_loss,
-                    'reward during training': summed_reward /(100//percentage),
-                    'Critic network loss': network_loss/(100//percentage),
+                    'reward during training': summed_reward /int(horizon*percentage),
+                    'Critic network loss': network_loss/int(horizon*percentage),
                     'uncertainty of the agent': agent.rnd_predictor.get_uncertainty() if adaptive_exploration else 0
                     })
 
             summed_reward = 0
             network_loss = 0
             if mod_rnd:
-                max_var = var_per_episode[training_step -1 if training_step > 0 else 0] if t >timesteps/20 else 100
-                agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(100//percentage), max_var = max_var)
+                max_var = var_per_episode[episode -1 if training_step > 0 else 0] if t >timesteps/20 else 100
+                agent.evaluate_rnd_netowrk(mean_var = mean_var_per_episode/(percentage * horizon), max_var = max_var)
                 mean_var_per_episode = 0
             keep_trajectory = ( seed == 0 and adaptive_exploration and KEEP_TRAJECTORY)
             tmp_mean, tmp_r, tmp_duration, tmp_cum= evaluate(kwargs=kwargs, iterations = int(0.05*horizon), agent=agent, timesteps=timesteps, evaluation_episodes = 30, domain = domain, episode = episode, label = label, debug = debug, options = options, keep_trajectories=keep_trajectory)
             if evaluated_episodes < mean_evaluation_rewards.shape[0]:
                 mean_evaluation_rewards[evaluated_episodes], evaluation_rewards[evaluated_episodes], evaluation_duration[evaluated_episodes], cum_evaluation_rewards[evaluated_episodes]  = tmp_mean, tmp_r, tmp_duration, tmp_cum
                 evaluated_episodes+=1 
-        
         
             current_observation, info = env.reset() #seed is not used as the documentation indicates
             current_observation = torch.FloatTensor(current_observation)
@@ -272,7 +271,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
             network_loss/= t #just to plot the average of the network loss. Otherwise it depends on the timesteps that the agent survived
             arg_var_per_episode[episode] = np.argmax(var)
             var_per_episode[episode] = np.max(var)
-            mean_var_per_episode+= np.mean(var[:t])#that is a new line
+            mean_var_per_episode+= np.mean(var[:t]) #that is a new line
             agent.rollout_episode = False
             episode+=1
             current_observation, info = env.reset()
