@@ -131,7 +131,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     if adeu_ensemble:
         lambda_parameter = 1 #it was 1
         N = 5
-        agent_params['train_frequency']*=N
+        agent_params['train_frequency']*=2*N
         agent = TD3_Ensemble_ADEU(agent_params = agent_params, N = N, lambda_parameter=lambda_parameter, beta = 1)
     elif not ucb:
         lambda_parameter = None
@@ -140,7 +140,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     else:
         lambda_parameter = 10 #it was 10
         N = 5
-        agent_params['train_frequency']*=N
+        agent_params['train_frequency']*=2*N
         agent = UCB_TD3_Agent(agent_params = agent_params, N = N, lambda_parameter=lambda_parameter, beta = 1)
     wandb_session(domain = domain, include_pos = include_pos, name=name, lambda_parameter = lambda_parameter, lr = lr, uc = uncertainty_const, rho =rho, code=code_creation(rho = rho,use_rnd = use_rnd, ucb  = ucb, adaptive_exploration=adaptive_exploration, noisy_nets=noisy_nets, comb=comb, mod_rnd=mod_rnd, per = per, adeu_ensemble=adeu_ensemble), debug = debug)
     mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards, evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, total_timesteps = \
@@ -252,7 +252,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
         action = agent.get_action(current_observation)# User-defined policy function
         var[t] = agent.get_variance()
         observation, reward, done, truncated, info = env.step(action)
-        tmp_network_loss, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done or truncated, timestep=t) #push that in memory
+        tmp_network_loss, tmp_rnd_loss = agent.step(current_observation, action, reward, torch.FloatTensor(observation), done or truncated, timestep=training_step) #push that in memory
         #just to have a good plotting
         rnd_loss = tmp_rnd_loss if (adaptive_exploration or use_rnd) and tmp_rnd_loss > 0 else rnd_loss
         network_loss += tmp_network_loss

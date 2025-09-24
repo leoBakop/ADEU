@@ -382,6 +382,7 @@ class Adeu_Std(BootUCB):
 
         #I can chane this max. I should even consider leaving it as qs_mean/qs_std allowing to keep track of differents tds for each action, so allowing for a f(s,a)
         variance = self.lambda_value*torch.sqrt(torch.max(qs_std))
+        print(' I should check what type of g() should be used')
         probabilities = (qs_mean/variance).detach().cpu().numpy()
         probabilities = np.exp(probabilities)
         probabilities/=np.sum(probabilities)
