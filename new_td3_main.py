@@ -175,7 +175,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
 
     store(filename, mean_reward, rewards, mean_evaluation_rewards, evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params = agent_params)    
     
-    if not comb or ucb: store_network(agent=agent, path = filename)
+    #if not comb or ucb: store_network(agent=agent, path = filename)
     env.close()
     return mean_evaluation_rewards
 
@@ -190,14 +190,15 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
    
         
     total_timesteps = 0
+    episodes_til_evaluation = 1
     max_timesteps_reached = False
     mean_reward = np.zeros(horizon)
-    percentage = 0.01
-    mean_evaluation_rewards = np.zeros(int(percentage*horizon)+100)
-    cum_evaluation_rewards = np.zeros(int(percentage*horizon)+100)
-    evaluation_duration = np.zeros(int(percentage*horizon)+100)
+    percentage = 0.03
+    mean_evaluation_rewards = np.zeros(int(percentage*horizon)+10)
+    cum_evaluation_rewards = np.zeros(int(percentage*horizon)+10)
+    evaluation_duration = np.zeros(int(percentage*horizon)+10)
     rewards = np.zeros(horizon*timesteps)
-    evaluation_rewards = np.zeros((int(percentage*horizon)+100, timesteps))
+    evaluation_rewards = np.zeros((int(percentage*horizon)+10, timesteps))
     evaluated_episodes = 0
     arg_var_per_episode = np.zeros(horizon) #stores in which timestep of each episode the agent has the biggest uncertainty
     var_per_episode = np.zeros(horizon)
@@ -223,11 +224,11 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
                     "timestep with max uncertanty": arg_var_per_episode[episode -1 if training_step > 0 else 0],
                     "max uncertanty": var_per_episode[episode -1 if training_step > 0 else 0],
                     'error of the rnd network': rnd_loss,
-                    'reward during training': summed_reward /int(horizon*percentage),
-                    'Critic network loss': network_loss/int(horizon*percentage),
+                    'reward during training': summed_reward /episodes_til_evaluation,
+                    'Critic network loss': network_loss/episodes_til_evaluation,
                     'uncertainty of the agent': agent.rnd_predictor.get_uncertainty() if adaptive_exploration else 0
                     })
-
+            episodes_til_evaluation = 1
             summed_reward = 0
             network_loss = 0
             if mod_rnd:
@@ -273,6 +274,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
             var_per_episode[episode] = np.max(var)
             mean_var_per_episode+= np.mean(var[:t]) #that is a new line
             agent.rollout_episode = False
+            episodes_til_evaluation+=1
             episode+=1
             current_observation, info = env.reset()
             current_observation = torch.FloatTensor(current_observation)
@@ -288,7 +290,7 @@ def run(env, domain, horizon, agent:TD3, timesteps, adaptive_exploration,use_rnd
                    
             
 
-        if (episode % int(.05 * horizon)) == 0:
+        if (episode % int(.2 * horizon)) == 0:
             np.save(path + f'/stored_data/uncertainty_of_{episode}th_episode.npy', var)
     env.close()
     wandb.finish()
@@ -322,12 +324,12 @@ def store_network(agent:TD3, path):
 def store(path, mean_reward, rewards, mean_evaluation_rewards,evaluation_rewards,  evaluation_duration, cum_evaluation_rewards, arg_var_per_epsiode, var_per_episode, params):
     
     np.save(path+'/stored_data/mean_reward.npy', mean_reward)
-    np.save(path+'/stored_data/rewards.npy', rewards)
-    np.save(path+'/stored_data/mean_evaluation_rewards.npy', mean_evaluation_rewards)
+    #np.save(path+'/stored_data/rewards.npy', rewards)
+    #np.save(path+'/stored_data/mean_evaluation_rewards.npy', mean_evaluation_rewards)
     np.save(path+'/stored_data/evaluation_rewards.npy', evaluation_rewards)
-    np.save(path+'/stored_data/evaluation_duration.npy', evaluation_duration)
+    #np.save(path+'/stored_data/evaluation_duration.npy', evaluation_duration)
     np.save(path+'/stored_data/cum_evaluation_rewards.npy', cum_evaluation_rewards)
-    np.save(path+'/stored_data/timestep_with_maximum_varience.npy', arg_var_per_epsiode)
+    #np.save(path+'/stored_data/timestep_with_maximum_varience.npy', arg_var_per_epsiode)
     np.save(path+'/stored_data/maximum_varience', var_per_episode)
     
     full_path = path + "/hyperparameters.txt"
@@ -360,7 +362,7 @@ def code_creation(rho, adaptive_exploration=True, use_rnd = False, noisy_nets = 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--ade', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--ade', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--noisy_nets', action='store_true', default=False)
     parser.add_argument('--comb', action='store_true', default=False, help='Would you like to utilize both Bolztmann and ade')
@@ -420,8 +422,7 @@ if __name__ == '__main__':
 
         
 
-    seeds = 20
-    
+    seeds = 10
     mean_evaluation_rewards = []
     code = code_creation(adaptive_exploration=ade, 
                                            ucb = ucb, 
@@ -434,7 +435,7 @@ if __name__ == '__main__':
                                            rho = rho)
     print(f"{domain} + code:{code}")
 
-    for s in range( seeds):
+    for s in range(seeds):
         main(seed = s, 
              horizon=horizon, 
              timesteps=timesteps, 
