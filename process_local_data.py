@@ -190,35 +190,46 @@ def create_graph_2(rewards_per_code, codes, domain, seeds):
     '''
     plt.figure(figsize=(10, 5))
 
-    for i,c in enumerate(codes):
-        #rewards = df[c+' - cumm_evaluation_reward']
+    N_target = 1.2e6  # total timesteps to map onto [0,1]
+
+    for i, c in enumerate(codes):
         variance, rewards = get_variance(c, seeds, domain)
         
-        #min_rewards = 1.25 * ignore_outliers(min_rewards) #1.5 except humanoid and swimmer and walker  in which I set it to 1.25
-        #max_rewards = 0.65 * ignore_outliers(max_rewards) #0.5 except humanoid and swimmer and walker (max 0.65) in which I set it to 0.85
-        variance = 0.6 * ignore_outliers(pd.Series(variance))
+        variance = 0.5 * ignore_outliers(pd.Series(variance))
         rewards = ignore_outliers(pd.Series(rewards))
-        #rewards = pd.Series(rewards)
 
-        rewards = exponential_smoothing(y_values=rewards, x_values=np.arange(len(rewards)), smoothing_param=0.5)
-        variance = exponential_smoothing(y_values=variance, x_values=np.arange(len(variance)), smoothing_param=0.5)
-        #min_rewards = exponential_smoothing(y_values=min_rewards, x_values=df['Step'], smoothing_param=0.5)
-        #max_rewards = exponential_smoothing(y_values=max_rewards, x_values=df['Step'], smoothing_param = 0.5)
+        rewards = exponential_smoothing(
+            y_values=rewards, 
+            x_values=np.arange(len(rewards)), 
+            smoothing_param=0.5
+        )
+        variance = exponential_smoothing(
+            y_values=variance, 
+            x_values=np.arange(len(variance)), 
+            smoothing_param=0.5
+        )
         rewards = np.array(rewards)
 
-        # Plotting
-        #x = np.arange(n_points)
-        plt.plot(np.arange(len(variance)), rewards, label=CODES_MAP[c])
-        plt.fill_between( np.arange(len(variance)), rewards - variance, rewards + variance, alpha=0.2)
+        # normalize indices so the data fills [0,1]
+        x = np.linspace(0, 1, len(rewards))
+
+        plt.plot(x, rewards, label=CODES_MAP[c])
+        plt.fill_between(x, rewards - variance, rewards + variance, alpha=0.2)
         plt.title(f"Cumulative episodic reward in the {domain} domain")
-    plt.xlabel("Timesteps")
+
+    
+    ticks = np.linspace(0, 1, 6)  # 0.0, 0.2, ..., 1.0
+    tick_labels = [f"{t:.1f}" for t in ticks]
+    tick_labels[-1] = "1.0 ×1.2e6"  # modify last tick
+
+    plt.xticks(ticks, tick_labels)
+    
     plt.ylabel("Reward")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(path+f'/{domain}_cumulative_rewards_plot.png')
     plt.show()
-
 
 def get_variance(code, seeds, domain):
 
@@ -245,9 +256,9 @@ def get_variance(code, seeds, domain):
 
 if __name__=='__main__':
     # 'domain' variable refers to the aaai_wandb... path
-    results_in_new_mujoco_main = True
+    results_in_new_mujoco_main = False
     domain = 'Hopper-v5'
-    seeds = 2
+    seeds = 20
     path = '/home/intelligence-lab-pc4/leonidas/adaptive_exploration/code/'
     path += f'experiments/TD3/{domain}/' if not results_in_new_mujoco_main else f'/experiments/TD3/new_mujoco_main/{domain}/'
 
