@@ -13,11 +13,11 @@ def plot_images_from_folder(folder_path, save_path):
     png_files.sort()
     for i in range(int(len(png_files)/2)):
         l_png_files.append(png_files[i])
-        l_png_files.append(png_files[i+4])
+        l_png_files.append(png_files[i+3])
 
     png_files = l_png_files    
-    # Create a 4x2 subplot (4 rows, 2 columns)
-    fig, axes = plt.subplots(4, 2, figsize=(50, 50))  # Adjusted figsize for larger subplots
+    # Create a 3x2 subplot (3 rows, 2 columns)
+    fig, axes = plt.subplots(3, 2, figsize=(50, 50))  # Adjusted figsize for larger subplots
     
     # Loop over the axes and the png files together
     for ax, png_file in zip(axes.flatten(), png_files):

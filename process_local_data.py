@@ -3,13 +3,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-CODES_MAP={'code: 0':'baseline',
-           'code: 2': 'IM',
+CODES_MAP={'code: 0':r'ADEU $f(s) = c$',
+           'code: 2': 'RND',
            'code: 3': 'Noisy Nets',
            'code: 5': 'UCB',
-           'code: 21': 'ADEU+im',
+           'code: 21': r'ADEU $f(s) = f_\text{RND}(s)$',
            'code: 6': 'ADEU+ensemble',
-           'code: 7': 'ADEU+ensemble+rho_0.1',
+           'code: 7': r'ADEU $f(s) = \lambda Q_\text{std}(s) $',#'ADEU+ensemble+rho_0.1',
            'code: 1': 'ADEU',
            'code: 11': 'sADEU',
            'code: 12': 'sADEU + unc.'
@@ -62,9 +62,9 @@ def print_results(results):
     print('Algorithm |  Mean Reward |  MAX reward ')
     for key, value in results.items():
         if key in best_results.keys() :
-            print(f'\033[1;31m{key}| {value[0]} | {value[1]}\033[0m')
+            print(f'\033[1;31m{key}| {round(value[0])} | {round(value[1])}\033[0m')
         else:
-            print(f'{key}| {value[0]} | {value[1]}')
+            print(f'{key}| {round(value[0])} | {round(value[1])}')
 
 
 def find_best_performance(results, percentage = 0.9):
@@ -225,6 +225,7 @@ def create_graph_2(rewards_per_code, codes, domain, seeds):
     plt.xticks(ticks, tick_labels)
     
     plt.ylabel("Reward")
+    plt.xlabel("Interactions with the Environment")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
@@ -257,8 +258,8 @@ def get_variance(code, seeds, domain):
 if __name__=='__main__':
     # 'domain' variable refers to the aaai_wandb... path
     results_in_new_mujoco_main = False
-    domain = 'Hopper-v5'
-    seeds = 20
+    domain = 'HumanoidStandup-v5'
+    seeds = 10
     path = '/home/intelligence-lab-pc4/leonidas/adaptive_exploration/code/'
     path += f'experiments/TD3/{domain}/' if not results_in_new_mujoco_main else f'/experiments/TD3/new_mujoco_main/{domain}/'
 

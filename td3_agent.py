@@ -196,7 +196,7 @@ class TD3(object):
 				+ np.random.normal(0, self.max_action * self.policy_noise, size=self.action_dim)
 			).clip(-self.max_action, self.max_action) """
         clear_action = self.get_clear_action(np.array(state))
-        if self.use_rnd: return clear_action
+        if self.use_rnd: return clear_action.clip(-self.max_action, self.max_action)
         if not self.adaptive_exploration or (self.adaptive_exploration and self.rollout_episode): 
             return (clear_action + np.random.normal(0, self.max_action * self.policy_noise, size=self.action_dim)).clip(-self.max_action, self.max_action)
 
