@@ -29,15 +29,21 @@ class BootDQN():
                  train_frequency, 
                  target_update,
                  head_start,
-                 gamma):
+                 gamma, 
+                 cnn = True,
+                 state_size = -1):
         
         self.policy_net = EnsembleNet(n_ensemble=K,
                                       n_actions=num_actions,
-                                      num_channels=num_channels).to(device)
+                                      num_channels=num_channels,
+                                      cnn = cnn,
+                                      state_size=state_size).to(device)
         
         self.target_net = EnsembleNet(n_ensemble=K,
                                       n_actions=num_actions,
-                                      num_channels=num_channels).to(device)
+                                      num_channels=num_channels,
+                                      cnn = cnn,
+                                      state_size=state_size).to(device)
         
         self.target_net.load_state_dict(self.policy_net.state_dict())
         
@@ -192,11 +198,16 @@ class DQN(BootDQN):
                  target_update, 
                  head_start,
                  gamma,
+                 
                  #for the Bpolztamnn exploration,
                  exploration_duration,
                  initial_tau = 1_000,
                  final_tau = 0.5,
-                 epsilon_greedy = True):
+                 epsilon_greedy = True,
+                 
+                 #for teh MLP core
+                 cnn = True,
+                 state_size = -1,):
         '''
         DQN is a special case of BootDQN. To enhance exploration, we also use the Boltzmann exploration.
         Hence, some more arguments are required to set up the Boltzmann exploration
@@ -212,7 +223,9 @@ class DQN(BootDQN):
                             train_frequency=train_frequency, 
                             target_update=target_update, 
                             head_start = head_start,
-                            gamma = gamma)
+                            gamma = gamma,
+                            cnn = cnn,
+                            state_size = state_size,)
 
         self.exploration_duration = exploration_duration
         self.initial_tau = initial_tau
@@ -286,7 +299,10 @@ class BootUCB(BootDQN):
                  target_update, 
                  head_start,
                  gamma,
-                 lambda_value):
+                 lambda_value,
+                 #for teh MLP core
+                 cnn = True,
+                 state_size = -1,):
         super().__init__(K, 
                          num_actions, 
                          num_channels, 
@@ -298,7 +314,10 @@ class BootUCB(BootDQN):
                          train_frequency, 
                          target_update, 
                          head_start,
-                         gamma)
+                         gamma,
+                         #for teh MLP core
+                        cnn = cnn,
+                        state_size = state_size,)
 
         self.lambda_value = lambda_value
 
@@ -340,7 +359,10 @@ class Adeu_Std(BootUCB):
                  head_start,
                  lambda_value,
                  rho,
-                 initial_tau):
+                 initial_tau,
+                 #for teh MLP core
+                 cnn = True,
+                 state_size = -1,):
         
         super().__init__(K, 
                          num_actions, 
@@ -354,6 +376,9 @@ class Adeu_Std(BootUCB):
                          target_update, 
                          head_start,
                          lambda_value,
+                         #for teh MLP core
+                         cnn = cnn,
+                         state_size = state_size,
                          )
         self.rho = rho
         self.initial_tau = initial_tau

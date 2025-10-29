@@ -82,7 +82,7 @@ def main(domain,
 
     #aent construction
     if code == -1:
-        maximum_reward = 1 #we now that from the Wrapper
+        maximum_reward = 1 #we know that from the Wrapper
         agents_parameters['initial_tau'] = 1 #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
         agents_parameters['final_tau'] = 0.01
         agents_parameters['exploration_duration'] = int(0.5*horizon)

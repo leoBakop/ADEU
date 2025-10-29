@@ -21,6 +21,27 @@ def weights_init(m):
     else:
         print('%s is not initialized.' %classtype)
 
+
+class CoreNetMLP(nn.Module):
+    def __init__(self, input_dim, hidden_dim=512):
+        super(CoreNetMLP, self).__init__()
+        # Two hidden layers of size 512
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, 64*7*7)
+        
+        # Initialize weights (same as your conv version)
+        self.fc1.apply(weights_init)
+        self.fc2.apply(weights_init)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+
+        return x
+
+
+
+
 class CoreNet(nn.Module):
     def __init__(self, num_channels=4):
         super(CoreNet, self).__init__()
@@ -57,9 +78,11 @@ class HeadNet(nn.Module):
         return x
 
 class EnsembleNet(nn.Module):
-    def __init__(self, n_ensemble, n_actions, num_channels):
+    def __init__(self, n_ensemble, n_actions, num_channels, cnn = True, state_size = -1):
         super(EnsembleNet, self).__init__()
-        self.core_net = CoreNet(num_channels=num_channels)
+        if not cnn and state_size == -1:
+            raise 'You should define the size of the input layer'
+        self.core_net = CoreNet(num_channels=num_channels) if cnn else CoreNetMLP(input_dim=state_size, hidden_dim=512)
         self.net_list = nn.ModuleList([HeadNet(n_actions=n_actions) for k in range(n_ensemble)])
 
     def _core(self, x):
