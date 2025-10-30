@@ -11,14 +11,16 @@ register(
     entry_point="deepsea:DeepSea"
 )
 
+
 class DeepSea(gym.Env):
 
-    def __init__(self, N):
+    def __init__(self, N, stochastic = True):
         super(DeepSea, self).__init__()
         
         if N < 3:
             print(f"N={N} is pointless, defaulting to N=3")
             N = 3
+        self.stochastic = stochastic
         self.observation_space = spaces.MultiBinary(N ** 2)
         self.action_space = spaces.Discrete(2)
         # create a NxN grid
@@ -42,6 +44,9 @@ class DeepSea(gym.Env):
         self.converged_after = -1
         self.consecutive_stuck_episodes = 0  # Track consecutive episodes in stuck range
     
+
+    def get_optimal_reward(self):
+        return self.optimal_reward
 
     def get_onehot_state(self):
         return self.grid.ravel().copy().astype(np.float32) 
@@ -72,11 +77,14 @@ class DeepSea(gym.Env):
                     # the first element corresponds to left 
                     # and the second element to right, by convention
                     # self.action_map[(i,j)] = [0,1]
-                    self.action_map[(i,j)] = [np.random.randint(0, 2)]
-                    if self.action_map[(i,j)][0] == 0:
-                        self.action_map[(i,j)].append(1)
+                    if self.stochastic:
+                        self.action_map[(i,j)] = [np.random.randint(0, 2)]
+                        if self.action_map[(i,j)][0] == 0:
+                            self.action_map[(i,j)].append(1)
+                        else:
+                            self.action_map[(i,j)].append(0)
                     else:
-                        self.action_map[(i,j)].append(0)
+                        self.action_map[(i,j)] = [0,1]
         
         self.grid = np.zeros((self.N, self.N), dtype=int)
         self.grid[0,0] = 1
@@ -94,7 +102,7 @@ class DeepSea(gym.Env):
             self.consecutive_stuck_episodes += 1
             if self.consecutive_stuck_episodes >= 2000:
                 print(f"Agent stuck in suboptimal policy for 1000 consecutive episodes (avg_regret: {avg_regret:.4f})")
-                return self.get_onehot_state(), {'solved':100000}  # -1 indicates stuck/failed
+                return self.get_onehot_state(), {'solved':-1}  # -1 indicates stuck/failed
         else:
             self.consecutive_stuck_episodes = 0  # Reset counter if not in stuck range
 
@@ -172,18 +180,22 @@ class DeepSea(gym.Env):
             return 0
         return self.cumulative_regret / self.total_episodes
 
+
+
+
 if __name__=="__main__":
-    ds = DeepSea(6, seed=10)
-    
+    ds = DeepSea(6, stochastic=False)
+    import time
     episodes = 10
-    
-    for _ in range(episodes):
+    for e in range(episodes):
         done = False
         total = 0
-        obs, _ = ds.reset()
+        obs, _ = ds.reset(seed = e)
         while not done: 
             print(ds.grid)
-            action = int(input("Enter action: "))
+            #action = int(input("Enter action: "))
+            action = 1
+            time.sleep(0.5)
             obs, reward, terminated, truncated, info = ds.step(action)
             print("reward is ", reward)
             total += reward

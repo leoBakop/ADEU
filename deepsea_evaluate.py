@@ -12,7 +12,7 @@ def evaluate(n, agent:BootDQN, seed, evaluation_episodes = 30):
     env = make_environment(n)
     obs, _ = env.reset(seed=seed)
     cumulative_rewards_per_episode = np.zeros(evaluation_episodes)
-    
+    solved = True
     for episode in range(evaluation_episodes):
         rewards = 0
 
@@ -25,13 +25,14 @@ def evaluate(n, agent:BootDQN, seed, evaluation_episodes = 30):
             #if info['lives'] == 0 and terminated:
             if terminated:
                 obs, info = env.reset()
+                solved = solved and (info.get('solved', -1) != -1)
                 cumulative_rewards_per_episode[episode] = rewards
                 break
 
     env.close()
-    return np.mean(cumulative_rewards_per_episode)
+    return np.mean(cumulative_rewards_per_episode), solved
 
 
 def make_environment(N):
-    env = gym.make('DeepSea', N=N,)
+    env = gym.make('DeepSea', stochastic = False, N=N,)
     return env
