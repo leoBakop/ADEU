@@ -438,6 +438,56 @@ class Adeu_Std(BootUCB):
 
     def get_lambda_value(self, ):
         return self.lambda_value
+    
+
+class EZ_ADEU(DQN):
+    '''
+    In this class, the adeu instance that emulates the ez-greedy algorithm has been implemented. 
+    For more details on the implementation check both the ADEU and the dabney et al papers.
+    '''
+    
+    def __init__(self, 
+                 K, 
+                 num_actions, 
+                 num_channels, 
+                 learning_rate, 
+                 device, 
+                 buffer_size, 
+                 batch_size, 
+                 beta, 
+                 train_frequency, 
+                 target_update, 
+                 head_start,
+                 gamma,
+                 
+                 #for the Bpolztamnn exploration,
+                 exploration_duration,
+                 initial_tau = 1_000,
+                 final_tau = 0.5,
+                 state_size = -1,):
+        super.__init__(K, 
+                 num_actions, 
+                 num_channels, 
+                 learning_rate, 
+                 device, 
+                 buffer_size, 
+                 batch_size, 
+                 beta, 
+                 train_frequency, 
+                 target_update, 
+                 head_start,
+                 gamma,
+                 exploration_duration,
+                 initial_tau = initial_tau,
+                 final_tau = final_tau,
+                 epsilon_greedy = True, #by we willneed an anealing epsilon since it will serve as our rho
+                 
+                 #for teh MLP core
+                 cnn = False,
+                 state_size = state_size,)
+        
+        
+
 def ensure_flat(x: torch.Tensor) -> torch.Tensor:
     """
     Ensures x has shape (N,) instead of (N,1).
