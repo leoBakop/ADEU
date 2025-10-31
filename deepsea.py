@@ -101,7 +101,7 @@ class DeepSea(gym.Env):
         if 0.99 < avg_regret < 0.9919:
             self.consecutive_stuck_episodes += 1
             if self.consecutive_stuck_episodes >= 2000:
-                print(f"Agent stuck in suboptimal policy for 1000 consecutive episodes (avg_regret: {avg_regret:.4f})")
+                #print(f"Agent stuck in suboptimal policy for 1000 consecutive episodes (avg_regret: {avg_regret:.4f})")
                 return self.get_onehot_state(), {'solved':-1}  # -1 indicates stuck/failed
         else:
             self.consecutive_stuck_episodes = 0  # Reset counter if not in stuck range

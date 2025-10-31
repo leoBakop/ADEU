@@ -14,7 +14,7 @@ import numpy as np
 from replay_buffer import Ensemble_Buffer
 from atari_utils import *
 from tqdm import tqdm
-
+from scipy.stats import zipf 
 class BootDQN():
 
     def __init__(self,
@@ -459,13 +459,15 @@ class EZ_ADEU(DQN):
                  target_update, 
                  head_start,
                  gamma,
-                 
+                 N,               
                  #for the Bpolztamnn exploration,
                  exploration_duration,
                  initial_tau = 1_000,
                  final_tau = 0.5,
-                 state_size = -1,):
-        super.__init__(K, 
+                 state_size = -1,
+                 cnn = True,
+                 ):
+        super().__init__(K, 
                  num_actions, 
                  num_channels, 
                  learning_rate, 
@@ -480,13 +482,61 @@ class EZ_ADEU(DQN):
                  exploration_duration,
                  initial_tau = initial_tau,
                  final_tau = final_tau,
-                 epsilon_greedy = True, #by we willneed an anealing epsilon since it will serve as our rho
+                 epsilon_greedy = True, #we will need an anealing epsilon since it will serve as our rho
                  
                  #for teh MLP core
                  cnn = False,
                  state_size = state_size,)
         
+        self.zeta = zipf(a = 1.25)#a is the mu parameter defined in dabney
+        self.n = 0 #let's say reverse length of the option
+        self.current_options = -1 #what action is replicated when simulating the current option
+        self.explored = False #stores whether agent aexplored or not in the previous step see paper for more details
+        self.eps = 1/(N + 1)
+
+    def calculate_uncertainty(self, ):
+
+        eps = self.eps
+        self.update_variance(eps)
+
+        if self.n == 0 and not self.explored:
+            return eps, 0
+        if self.n == 0 and self.explored:
+            n = self.zeta.rvs(size=1)
+            return 1, n -1 
         
+        if self.n > 0:
+            return 1, self.n-1
+        
+        return 
+    
+
+    def get_action(self, state):
+        #warmup action 
+        if self.steps < self.head_start:
+            return np.random.choice(self.num_actions, size = 1)[0]
+        f, n = self.calculate_uncertainty()
+        self.n = n
+        probs = [1 - f, f]
+        clear_action = self.get_clear_action(state)
+        scenarios = ['ploit', 'plore']
+        s = np.random.choice(scenarios, size = 1, p = probs)
+        if s == 'ploit':
+            self.explored = False
+            return clear_action
+        
+        self.explored = True
+        if self.n > 0:
+            #use teh previously selected action
+            return self.current_options
+        omega = np.random.choice(self.num_actions, size = 1)
+        self.current_options = omega
+
+        return omega
+    
+    def reset(self,):
+        self.n = 0
+        self.explored = False
 
 def ensure_flat(x: torch.Tensor) -> torch.Tensor:
     """

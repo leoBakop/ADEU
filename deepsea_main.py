@@ -93,7 +93,11 @@ def main(
         agents_parameters['lambda_value'] = 0.1
         agent = BootUCB(**agents_parameters)
 
-    
+    if code == 1:
+
+        agents_parameters['exploration_duration'] = int(0.5*horizon)
+        agents_parameters['N'] = n
+        agent = EZ_ADEU(**agents_parameters)
         
     
     name = reverse_code(code)+f', seed {seed}'
@@ -215,6 +219,7 @@ def code_creation(agent_args):
     if agent_args['bdqn']: return -2
     if agent_args['ucb']: return -3
     if agent_args['adeu_std']: return 3
+    if agent_args['ez_adeu']: return 1
     return 0    
 
 def reverse_code(code):
@@ -222,17 +227,18 @@ def reverse_code(code):
     if code == -2: return 'bdqn'
     if code == -3: return 'ucb'
     if code == 3: return 'adeu_std'
-
+    if code == 1: return 'ez_adeu'
 
 if __name__=='__main__':
     seeds = 5
 
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
-    parser.add_argument('--DQN', action='store_true', default=True, help='Use the standard DQN')
+    parser.add_argument('--DQN', action='store_true', default=False, help='Use the standard DQN')
     parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
     parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_std', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
+    parser.add_argument('--ez_adeu', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
@@ -245,6 +251,7 @@ if __name__=='__main__':
     bdqn = args.BDQN
     ucb = args.UCB
     adeu_std = args.adeu_std
+    ez_adeu = args.ez_adeu
     N = args.N
     rho = args.rho
 
@@ -254,7 +261,8 @@ if __name__=='__main__':
         'dqn': dqn,
         'bdqn': bdqn,
         'ucb': ucb,
-        'adeu_std': adeu_std
+        'adeu_std': adeu_std,
+        'ez_adeu' : ez_adeu
     }
 
 
