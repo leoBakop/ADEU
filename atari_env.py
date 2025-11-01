@@ -2,6 +2,7 @@ import gymnasium as gym
 from gymnasium import Wrapper
 import numpy as np
 from atari_utils import *
+
 class AtariEnv(Wrapper):
     def __init__(self, 
                  env:gym.Env, 
@@ -17,27 +18,29 @@ class AtariEnv(Wrapper):
     def step(self, action):
         frames = []
         rewards = 0
-        trunc = False
+        truncs = False
+        termits = False
         for _ in range(self.frame_stacking):
             frame, reward, terminated, truncated, info = self.env.step(action)
             frame = normilize(frame)
             frames.append(frame)
             rewards+=reward
-            if (truncated or terminated) and (not trunc):
-                trunc = True
+            if truncated and not truncs:  truncs = True
+            if terminated and not termits: termits = True
+               
 
         frames = stack_frames(frames)
         if rewards == 0:
-            return frames, rewards, trunc, info
+            return frames, rewards, termits, truncs, info
         
         rewards = +1 if rewards > 0 else -1
-        return frames, rewards, trunc, info
+        return frames, rewards, termits,  truncs, info
     
     
     
 
 
-    def reset(self, seed = None):
+    def reset(self, seed = None, **kwargs):
         if seed is not None: obs, info = self.env.reset(seed = seed)
         else : obs, original_info = self.env.reset()
         

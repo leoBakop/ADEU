@@ -15,6 +15,12 @@ from replay_buffer import Ensemble_Buffer
 from atari_utils import *
 from tqdm import tqdm
 from scipy.stats import zipf 
+
+from torch.distributions.categorical import Categorical
+
+
+
+
 class BootDQN():
 
     def __init__(self,
@@ -538,6 +544,44 @@ class EZ_ADEU(DQN):
         self.n = 0
         self.explored = False
 
+class PPO():
+    '''
+    This class implements the discrete action space PPO algorith as implemented in Clean RL. I will have to cite this paper.
+    no other changes have been made.
+    '''
+    
+class Agent(nn.Module):
+    def __init__(self, envs):
+        
+        super().__init__()
+        self.network = nn.Sequential(
+            layer_init(nn.Conv2d(4, 32, 8, stride=4)),
+            nn.ReLU(),
+            layer_init(nn.Conv2d(32, 64, 4, stride=2)),
+            nn.ReLU(),
+            layer_init(nn.Conv2d(64, 64, 3, stride=1)),
+            nn.ReLU(),
+            nn.Flatten(),
+            layer_init(nn.Linear(64 * 7 * 7, 512)),
+            nn.ReLU(),
+        )
+        self.actor = layer_init(nn.Linear(512, envs.single_action_space.n), std=0.01)
+        self.critic = layer_init(nn.Linear(512, 1), std=1)
+
+    def get_value(self, x):
+        return self.critic(self.network(x / 255.0))
+
+    def get_action_and_value(self, x, action=None):
+        hidden = self.network(x / 255.0)
+        logits = self.actor(hidden)
+        probs = Categorical(logits=logits)
+        if action is None:
+            action = probs.sample()
+        return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
+    
+    
+
+
 def ensure_flat(x: torch.Tensor) -> torch.Tensor:
     """
     Ensures x has shape (N,) instead of (N,1).
@@ -550,6 +594,11 @@ def ensure_flat(x: torch.Tensor) -> torch.Tensor:
         return x              # already (N,)
     else:
         raise ValueError(f"Unexpected shape {x.shape}, expected (N,) or (N,1).")
+
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
 
     
     
