@@ -3,12 +3,11 @@ import gymnasium as gym
 import ale_py
 from atari_env import AtariEnv
 import numpy as np
-import torch
 from bootstrap_dqn_agent import BootDQN
+from ppo_agents import PPO_Agent
 
 
-
-def evaluate(agent:BootDQN, domain, timesteps, seed, evaluation_episodes = 30):
+def evaluate(agent:BootDQN|PPO_Agent, domain, timesteps, seed, evaluation_episodes = 30):
     env = make_environment(domain, timesteps)
     obs, _ = env.reset(seed=seed)
     cumulative_rewards_per_episode = np.zeros(evaluation_episodes)
@@ -18,7 +17,8 @@ def evaluate(agent:BootDQN, domain, timesteps, seed, evaluation_episodes = 30):
 
         while True:
             action = agent.get_clear_action(obs)
-            new_obs, r, terminated, info = env.step(action)
+            new_obs, r, terminated, truncated, info = env.step(action)
+            terminated = terminated or truncated
             rewards+=r
             obs = new_obs
             #if info['lives'] == 0 and terminated:

@@ -130,7 +130,7 @@ def store(path,agent:BootDQN, cumulative_rewards, agent_parameters:dict, total_t
         for key, value in agent_parameters.items():
             f.write(f"{key}: {value}\n")
 
-    agent.save(path)
+    #agent.save(path)
 
 def run(n, seed, agent:BootDQN, env:gym.Env, horizon,code):
     
@@ -270,7 +270,7 @@ if __name__=='__main__':
     code = code_creation(agent_args)
     consecutive_fails = 0
     for s in range(seeds):
-        for n in range(3, N, 3):
+        for n in range(50, 101, 3):
             failed = main(n, seed=s, code = code, rho = rho)
             consecutive_fails = consecutive_fails + 1 if failed else 0
             if consecutive_fails > 2:

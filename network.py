@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.distributions import MultivariateNormal
 import torch.nn.functional as F
 from torchrl.modules import NoisyLinear
+import numpy as np
 
 '''
 the following three classes (core and head) are responsible for generating an Bootstrap DQN ensemble
@@ -329,3 +330,53 @@ class RND_NetworkPred(nn.Module):
         self.uncertainty = uncertainty
     def get_uncertainty(self):
         return self.uncertainty
+    
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+
+
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    nn.init.orthogonal_(layer.weight, std)
+    nn.init.constant_(layer.bias, bias_const)
+    return layer
+
+
+class PPONetwork(nn.Module):
+    def __init__(self, envs, num_channels=4):
+        super(PPONetwork, self).__init__()
+        self.num_channels = num_channels
+
+        # Convolutional layers
+        self.conv1 = layer_init(nn.Conv2d(self.num_channels, 32, 8, 4))
+        self.conv2 = layer_init(nn.Conv2d(32, 64, 4, 2))
+        self.conv3 = layer_init(nn.Conv2d(64, 64, 3, 1))
+
+        
+        # Fully connected layer
+        self.fc = layer_init(nn.Linear(64 * 7 * 7, 512))
+
+        # Actor and critic heads
+        self.actor = layer_init(nn.Linear(512, envs.single_action_space.n), std=0.01)
+        self.critic = layer_init(nn.Linear(512, 1), std=1)
+
+    def forward(self, x, return_hidden = False, return_actor = False, return_critic = False,):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        reshape = 64*7*7
+        x = x.view(-1, reshape) # flatten
+        x = F.relu(self.fc(x))
+
+        # Outputs
+        if return_hidden: return x
+        elif return_actor: return self.actor(x)
+        elif return_critic: return self.critic(x)
+        else:
+            print('Sth wrong must happend')
+        return None
+
+
+
