@@ -46,13 +46,13 @@ def set_seed(seed):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
 
-def main(seed, code):
+def main(seed, code, dom):
 
     set_seed(seed)
 
     agent_params = {
         # Algorithm specific arguments
-        "env_id": "ALE/Pong-v5",  # the id of the environment
+        "env_id": dom,  # the id of the environment
         "total_timesteps": int(20e6),  # total timesteps of the experiments
         "learning_rate": 2.5e-4,  # the learning rate of the optimizer
         "num_envs": 8,  # the number of parallel game environments
@@ -229,9 +229,12 @@ if __name__ == "__main__":
     # Define hyperparameters as command-line arguments
     parser.add_argument('--PPO', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--RND', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
+
     args = parser.parse_args()
-    ppo = args.ppo
-    rnd = args.rnd
+    ppo = args.PPO
+    rnd = args.RND
+    dom = args.dom
 
     if ppo: code =-4
     elif rnd : code = -5
@@ -239,5 +242,5 @@ if __name__ == "__main__":
 
     seeds = 3
     for s in range(seeds):
-        main(s, code)
+        main(s, code, dom)
     
