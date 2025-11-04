@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
-from network import PPONetwork
+from network import PPONetwork, PPO_RNDModel
+import torch.nn.functional as F
+
 
 
 class PPO_Agent(nn.Module):
@@ -70,7 +72,6 @@ class PPO_Agent(nn.Module):
     def get_clear_action(self, x):
         if self.training_steps < self.head_start:
             return np.random.choice(self.num_actions)
-        print('I should check if this return just a single action')
         x = torch.from_numpy(x).to(self.device)
         with torch.no_grad():
             logits = self.network(x, return_actor = True)
@@ -85,6 +86,7 @@ class PPO_Agent(nn.Module):
 
     def train(self, obss, actions, rewards, logprobs, dones, values, next_obs, next_done):
         self.training_steps+=1
+
         with torch.no_grad():
             next_value = self.get_value(next_obs).reshape(1, -1)
             advantages = torch.zeros_like(rewards).to(self.device)
@@ -161,3 +163,324 @@ class PPO_Agent(nn.Module):
         return loss
 
 
+class RewardForwardFilter:
+    """EMA filter used in CleanRL RND to produce more stable intrinsic returns."""
+    def __init__(self, gamma):
+        self.rewems = None
+        self.gamma = gamma
+
+    def update(self, rews):
+        if self.rewems is None:
+            self.rewems = rews
+        else:
+            self.rewems = self.rewems * self.gamma + rews
+        return self.rewems
+
+
+
+class PPO_RND_Agent:
+    """
+    Composed agent that:
+      - owns a PPO_Agent (policy + ext/int critics)
+      - owns an RNDModel (predictor + target)
+      - computes intrinsic rewards, normalizes them, computes separate GAEs
+      - runs PPO updates using combined advantage = int_coef * int_adv + ext_coef * ext_adv
+      - trains RND predictor at the same frequency (masked proportion per minibatch)
+    """
+
+    def __init__(self,
+                 ppo_agent: PPO_Agent,
+                 rnd_model: PPO_RNDModel,
+                 device,
+                 update_proportion=0.25,
+                 int_coef=1.0,
+                 ext_coef=2.0,
+                 int_gamma=0.99):
+        self.ppo_agent = ppo_agent
+        self.rnd = rnd_model.to(device)
+        self.device = device
+        self.update_proportion = update_proportion
+        self.int_coef = int_coef
+        self.ext_coef = ext_coef
+        self.int_gamma = int_gamma
+        self.anneal_lr = ppo_agent.anneal_lr
+        self.num_iterations = ppo_agent.num_iterations
+        self.learning_rate = ppo_agent.learning_rate
+        # combined optimizer: PPO parameters + predictor parameters (target is frozen)
+        combined_parameters = list(self.ppo_agent.parameters()) + list(self.rnd.predictor.parameters())
+        self.optimizer = optim.Adam(combined_parameters, lr=self.ppo_agent.learning_rate, eps=1e-5)
+
+        # running stats for intrinsic rewards (target normalization)
+        from gym.wrappers.normalize import RunningMeanStd
+        self.reward_rms = RunningMeanStd()
+        self.obs_rms = RunningMeanStd(shape=(1, 1, 84, 84))
+        self.discounted_reward = RewardForwardFilter(self.int_gamma)
+        self.variance = 0
+        self.episodes_without_evaluation = 0
+
+
+    def reduce_lr(self, iteration, ):
+        if self.anneal_lr:
+            frac = 1.0 - (iteration - 1.0) / self.num_iterations
+            lrnow = frac * self.learning_rate
+            self.optimizer.param_groups[0]["lr"] = lrnow
+
+
+    def get_clear_action(self, x):
+        return self.ppo_agent.get_clear_action(x)
+    
+    def get_action_and_value(self, x):
+        return self.ppo_agent.get_action_and_value(x)
+
+    def get_variance(self, normilized = True):
+        if normilized:
+            v = self.variance/(self.episodes_without_evaluation+1)
+            self.episodes_without_evaluation = 0
+            return v, 0
+        return self.variance, 0
+
+    def compute_intrinsic(self, next_obs):
+        """
+        next_obs: torch tensor (num_envs, C, H, W)
+        we extract the last channel and normalize using obs_rms then forward through rnd networks.
+        returns: intrinsic rewards tensor shape (num_envs,)
+        """
+        # extract same as original (channel index 3)
+        rnd_input = (next_obs[:, 3, :, :].reshape(next_obs.shape[0], 1, 84, 84) - torch.from_numpy(self.obs_rms.mean).to(self.device)) / torch.sqrt(torch.from_numpy(self.obs_rms.var).to(self.device))
+        rnd_input = rnd_input.clamp(-5, 5).float()
+        with torch.no_grad():
+            target_feat = self.rnd.target(rnd_input)
+            pred_feat = self.rnd.predictor(rnd_input)
+            intrinsic = ((target_feat - pred_feat).pow(2).sum(1) / 2.0).cpu().numpy()
+        return intrinsic, rnd_input
+
+    def update_obs_rms(self, obs_array):
+        # obs_array: numpy array of shape (N, 1, 84, 84)
+        self.obs_rms.update(obs_array)
+
+    def train(self,
+              obs,             # tensor (num_steps, num_envs, C, H, W)
+              actions,         # tensor (num_steps, num_envs) or with action dim
+              ext_rewards,     # tensor (num_steps, num_envs)
+              logprobs,        # tensor (num_steps, num_envs)
+              dones,           # tensor (num_steps, num_envs)
+              ext_values,      # tensor (num_steps, num_envs)
+              next_obs,        # tensor (num_envs, C, H, W)
+              next_done,       # tensor (num_envs,)
+              ):
+        """
+        Performs:
+          - compute intrinsic rewards for the rollout (and normalize)
+          - compute ext and int GAEs and returns
+          - combine advantages for policy updates
+          - run minibatch PPO updates and RND predictor updates (same frequency)
+        Returns:
+          (ppo_loss_item, rnd_forward_loss_item)
+        """
+
+        self.episodes_without_evaluation+=1
+
+        num_steps, num_envs = obs.shape[0], obs.shape[1]
+        device = self.device
+
+        # 1) compute intrinsic rewards per step for all next states in rollout
+        # We compute intrinsic for the sequence of "next" observations corresponding to each step.
+        # For step t, next_obs_for_step is obs[t+1] except last step uses provided next_obs
+        intrinsic_rewards = torch.zeros((num_steps, num_envs), dtype=torch.float32, device=device)
+        rnd_inputs_all = []
+
+        # Build "next states" for curiosity consistent with transitions
+        for t in range(num_steps):
+            if t < num_steps - 1:
+                next_obs_t = obs[t + 1].to(device)
+            else:
+                next_obs_t = next_obs.to(device)
+            intrinsic_np, rnd_input = self.compute_intrinsic(next_obs_t)
+            intrinsic_rewards[t] = torch.tensor(intrinsic_np, device=device)
+            rnd_inputs_all.append(rnd_input.detach().cpu().numpy())
+
+        # process intrinsic normalization similar to original script
+        # discounted intrinsic per env
+        intrinsic_per_env = np.array([self.discounted_reward.update(rw) for rw in intrinsic_rewards.cpu().data.numpy().T])
+        mean, std, count = np.mean(intrinsic_per_env), np.std(intrinsic_per_env), len(intrinsic_per_env)
+        self.reward_rms.update_from_moments(mean, std**2, count)
+        intrinsic_rewards = intrinsic_rewards / np.sqrt(self.reward_rms.var)
+
+        # Update observation RMS using all rnd_inputs collected (stack)
+        rnd_inputs_stack = np.concatenate(rnd_inputs_all, axis=0)  # shape (num_steps*num_envs, 1, 84,84)
+        self.obs_rms.update(rnd_inputs_stack)
+
+        # 2) compute separate GAEs for extrinsic and intrinsic returns
+        # ext_values provided correspond to external critic; assume internal critic is also produced by PPO network in get_action_and_value.
+        # for internal values we need to query the actor/critic - we will reuse ppo_agent.get_value applied to obs to get int_values.
+        with torch.no_grad():
+            # compute int_values from agent's critic (we assume network has a second critic when requested,
+            # but user's PPO_Agent.get_value may return appropriate tensor - if not, adapt to your PPONetwork)
+            # Here, we attempt to get internal value via ppo_agent.get_value (which in your previous form returned ext and int).
+            # If get_value returns a single value, we will reuse ext_values for int_values (best-effort).
+            try:
+                # Try to get both critics from the network if available via agent.get_value
+                val = self.ppo_agent.get_value(next_obs.to(device))
+                # If val is tuple-like (ext, int), handle accordingly
+                if isinstance(val, tuple) or (hasattr(val, 'shape') and val.ndim > 1 and val.shape[0] > 1):
+                    next_ext_value = val[0].reshape(1, -1)
+                    next_int_value = val[1].reshape(1, -1)
+                else:
+                    next_ext_value = val.reshape(1, -1)
+                    next_int_value = val.reshape(1, -1)
+            except Exception:
+                # fallback: use ext_values last step for both
+                next_ext_value = ext_values[-1].reshape(1, -1)
+                next_int_value = ext_values[-1].reshape(1, -1)
+
+            # Prepare advantage holders
+            ext_advantages = torch.zeros_like(ext_rewards).to(device)
+            int_advantages = torch.zeros_like(intrinsic_rewards).to(device)
+            ext_lastgaelam = 0
+            int_lastgaelam = 0
+
+            for t in reversed(range(num_steps)):
+                if t == num_steps - 1:
+                    ext_nextnonterminal = 1.0 - next_done
+                    int_nextnonterminal = 1.0
+                    ext_nextvalues = next_ext_value
+                    int_nextvalues = next_int_value
+                else:
+                    ext_nextnonterminal = 1.0 - dones[t + 1]
+                    int_nextnonterminal = 1.0
+                    ext_nextvalues = ext_values[t + 1]
+                    # for int_nextvalues use int_values buffer if available; attempt to get via network otherwise reuse ext
+                    try:
+                        # compute int_values from network on obs[t+1]
+                        int_nextvalues = self.ppo_agent.get_value(obs[t + 1].to(device))[1]
+                    except Exception:
+                        int_nextvalues = ext_values[t + 1]
+
+                ext_delta = ext_rewards[t] + self.ppo_agent.gamma * ext_nextvalues.cpu() * ext_nextnonterminal - ext_values[t]
+                int_delta = intrinsic_rewards[t] + self.int_gamma * int_nextvalues * int_nextnonterminal - (self.ppo_agent.get_value(obs[t].to(device))[1] if True else 0)
+                ext_advantages[t] = ext_lastgaelam = (
+                    ext_delta + self.ppo_agent.gamma * self.ppo_agent.gae_lambda * ext_nextnonterminal * ext_lastgaelam
+                )
+                int_advantages[t] = int_lastgaelam = (
+                    int_delta + self.int_gamma * self.ppo_agent.gae_lambda * int_nextnonterminal * int_lastgaelam
+                )
+
+            ext_returns = ext_advantages.cpu() + ext_values
+            int_returns = int_advantages.cpu() + (ext_values)  # if separate int-values exist, replace ext_values accordingly
+
+        # 3) flatten batch for training
+        b_obs = obs.reshape((-1,) + tuple(obs.shape[2:])).to(device)
+        b_actions = actions.reshape((-1,) + tuple(actions.shape[2:])).to(device) if actions.ndim > 2 else actions.reshape(-1).to(device)
+        b_logprobs = logprobs.reshape(-1).to(device)
+        b_ext_adv = ext_advantages.reshape(-1).to(device)
+        b_int_adv = int_advantages.reshape(-1).to(device)
+        b_ext_returns = ext_returns.reshape(-1).to(device)
+        b_int_returns = int_returns.reshape(-1).to(device)
+        b_ext_values = ext_values.reshape(-1).to(device)
+
+        # combined advantage for policy
+        b_advantages = b_int_adv * self.int_coef + b_ext_adv * self.ext_coef
+
+        # 4) PPO + RND optimization loop (minibatches + epochs)
+        batch_size = self.ppo_agent.batch_size
+        minibatch_size = self.ppo_agent.minibatch_size
+        clip_coef = self.ppo_agent.clip_coef
+
+        b_inds = np.arange(batch_size)
+        ppo_loss_val = None
+        rnd_forward_loss = None
+
+        for epoch in range(self.ppo_agent.update_epochs):
+            np.random.shuffle(b_inds)
+            for start in range(0, batch_size, minibatch_size):
+                end = start + minibatch_size
+                mb_inds = b_inds[start:end]
+
+                # get minibatch tensors
+                mb_obs = b_obs[mb_inds]
+                mb_actions = b_actions[mb_inds]
+                mb_logprobs = b_logprobs[mb_inds]
+                mb_advantages = b_advantages[mb_inds]
+                mb_ext_returns = b_ext_returns[mb_inds]
+                mb_ext_values = b_ext_values[mb_inds]
+
+                # evaluate current policy on minibatch
+                _, newlogprob, entropy, newvalue = self.ppo_agent.get_action_and_value(mb_obs, mb_actions.long() if mb_actions.ndim>0 else mb_actions)
+                # newvalue may be single or tuple; ensure shape
+                if isinstance(newvalue, tuple) or (hasattr(newvalue, 'shape') and newvalue.ndim>1 and newvalue.shape[1] > 1):
+                    # If network returns (ext, int), take ext for value loss here
+                    if isinstance(newvalue, tuple):
+                        new_ext_value = newvalue[0].view(-1)
+                        new_int_value = newvalue[1].view(-1)
+                    else:
+                        # fallback
+                        new_ext_value = newvalue.view(-1)
+                        new_int_value = newvalue.view(-1)
+                else:
+                    new_ext_value = newvalue.view(-1)
+                    new_int_value = newvalue.view(-1)
+
+                # policy ratio
+                logratio = newlogprob - mb_logprobs
+                ratio = logratio.exp()
+
+                # approx_kl for diagnostics
+                with torch.no_grad():
+                    old_approx_kl = (-logratio).mean()
+                    approx_kl = ((ratio - 1) - logratio).mean()
+
+                # normalize advantages if requested (common)
+                if self.ppo_agent.norm_adv:
+                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+
+                # Policy loss (clipped surrogate) - COMMON PPO
+                pg_loss1 = -mb_advantages * ratio
+                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - clip_coef, 1 + clip_coef)
+                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+
+                # Value loss (clipped) - COMMON PPO
+                if self.ppo_agent.clip_vloss:
+                    ext_v_loss_unclipped = (new_ext_value - mb_ext_returns) ** 2
+                    ext_v_clipped = mb_ext_values + torch.clamp(new_ext_value - mb_ext_values, -clip_coef, clip_coef)
+                    ext_v_loss_clipped = (ext_v_clipped - mb_ext_returns) ** 2
+                    ext_v_loss_max = torch.max(ext_v_loss_unclipped, ext_v_loss_clipped)
+                    ext_v_loss = 0.5 * ext_v_loss_max.mean()
+                else:
+                    ext_v_loss = 0.5 * ((new_ext_value - mb_ext_returns) ** 2).mean()
+
+                entropy_loss = entropy.mean()
+
+                # RND forward loss for this minibatch
+                # prepare rnd minibatch inputs from precomputed rnd_next_obs
+                mb_rnd = rnd_next_obs = None  # placeholder in case user wants per-minibatch RND from b_obs
+                # Instead, compute forward_loss from rnd inputs: we already computed rnd inputs per step earlier (rnd_inputs_stack)
+                # For simplicity, use rnd_inputs_stack flattened to match b_inds ordering
+                rnd_flat = torch.from_numpy(rnd_inputs_stack).to(device).float()  # shape (batch_size, 1, 84,84)
+                mb_rnd = rnd_flat[mb_inds]
+
+                # compute predictor vs target
+                predict_feat, target_feat = self.rnd(mb_rnd)
+                fwd_loss = F.mse_loss(predict_feat, target_feat.detach(), reduction='none').mean(-1)
+
+                # mask a proportion of samples to update predictor only on subset
+                mask = torch.rand(len(fwd_loss), device=device)
+                mask = (mask < self.update_proportion).type(torch.FloatTensor).to(device)
+                forward_loss = (fwd_loss * mask).sum() / torch.max(mask.sum(), torch.tensor([1.0], device=device))
+
+                # full loss: policy + value + rnd forward loss
+                loss = pg_loss - self.ppo_agent.ent_coef * entropy_loss + ext_v_loss * self.ppo_agent.vf_coef + forward_loss
+
+                # gradient step on combined parameters (ppo + rnd.predictor)
+                self.optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(list(self.ppo_agent.parameters()) + list(self.rnd.predictor.parameters()), self.ppo_agent.max_grad_norm)
+                self.optimizer.step()
+
+                # keep last values for reporting
+                ppo_loss_val = loss.item()
+                rnd_forward_loss = forward_loss.item()
+                
+                
+                self.variance += rnd_forward_loss
+
+        return ppo_loss_val, rnd_forward_loss

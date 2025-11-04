@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 
-MAXIMUM_SEEDS = 5
+MAXIMUM_SEEDS = 4
 MAXIMUM_TIMESTEPS = int(1e6)
 
 

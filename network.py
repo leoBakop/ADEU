@@ -380,3 +380,36 @@ class PPONetwork(nn.Module):
 
 
 
+class PPO_RNDModel(nn.Module):
+    """Predictor + fixed target network for Random Network Distillation."""
+    def __init__(self, input_size, output_size):
+        super().__init__()
+        feature_output = 7 * 7 * 64
+
+        # Predictor network (trainable)
+        self.predictor = nn.Sequential(
+            layer_init(nn.Conv2d(1, 32, 8, stride=4)), nn.LeakyReLU(),
+            layer_init(nn.Conv2d(32, 64, 4, stride=2)), nn.LeakyReLU(),
+            layer_init(nn.Conv2d(64, 64, 3, stride=1)), nn.LeakyReLU(),
+            nn.Flatten(),
+            layer_init(nn.Linear(feature_output, 512)), nn.ReLU(),
+            layer_init(nn.Linear(512, 512)), nn.ReLU(),
+            layer_init(nn.Linear(512, 512))
+        )
+
+        # Target network (frozen)
+        self.target = nn.Sequential(
+            layer_init(nn.Conv2d(1, 32, 8, stride=4)), nn.LeakyReLU(),
+            layer_init(nn.Conv2d(32, 64, 4, stride=2)), nn.LeakyReLU(),
+            layer_init(nn.Conv2d(64, 64, 3, stride=1)), nn.LeakyReLU(),
+            nn.Flatten(),
+            layer_init(nn.Linear(feature_output, 512))
+        )
+        for p in self.target.parameters():
+            p.requires_grad = False
+
+    def forward(self, next_obs):
+        # next_obs: (batch, 1, 84, 84)
+        pred = self.predictor(next_obs)
+        targ = self.target(next_obs)
+        return pred, targ

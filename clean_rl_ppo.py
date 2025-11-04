@@ -8,11 +8,13 @@ import numpy as np
 import torch
 import wandb
 from atari import wandb_session
-
+from network import PPO_RNDModel
 from atari_env import AtariEnv
-from ppo_agents import PPO_Agent
+from ppo_agents import *
 from atari_evaluate import evaluate
 from tqdm import tqdm
+import argparse
+
 
 def make_env(env_id, idx, capture_video, run_name):
     def thunk():
@@ -44,7 +46,7 @@ def set_seed(seed):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
 
-def main(seed):
+def main(seed, code):
 
     set_seed(seed)
 
@@ -70,19 +72,19 @@ def main(seed):
         'head_start':50_000,
     }
 
-
+    agent_params['head_start'] /= agent_params['num_steps']
 
     agent_params ['batch_size'] = int(agent_params['num_envs'] * agent_params['num_steps'])
     agent_params["minibatch_size"] = int(agent_params['batch_size'] // agent_params['num_minibatches'])
     agent_params['num_iterations'] = agent_params['total_timesteps'] // agent_params['batch_size']
-    run_name = f"PPO, seed {seed}"
+    run_name = f"PPO, seed {seed}" if code == -4 else f"RND_PPO, seed {seed}"
 
     wandb_session(
         domain = agent_params['env_id'],
         rho = None,
         lr = agent_params['learning_rate'],
         name = run_name,
-        code = -4,
+        code = code,
         debug=False 
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -94,6 +96,20 @@ def main(seed):
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
     agent = PPO_Agent(envs, **agent_params, device=device).to(device)
+    if code == -5:
+         # RND model
+        rnd_model = PPO_RNDModel(4, envs.single_action_space.n).to(device)
+
+        # PPO_RND_Agent (composition)
+        agent = PPO_RND_Agent(
+            ppo_agent=agent,
+            rnd_model=rnd_model,
+            device=device,
+            update_proportion=agent_params.get('update_proportion', 0.25),
+            int_coef=agent_params.get('int_coef', 1.0),
+            ext_coef=agent_params.get('ext_coef', 2.0),
+            int_gamma=agent_params.get('int_gamma', 0.99)
+    )
     
 
     # ALGO Logic: Storage setup
@@ -118,6 +134,26 @@ def main(seed):
     loss = 0
     noop = 0
     episodes_till_evaluate = 1
+
+
+    if code == -5:
+
+        # initialize obs_rms for rnd (random actions)
+        print("Initializing obs_rms for RND...")
+        next_ob = []
+        #for step in range(agent_params['num_steps'] * agent_params.get('num_iterations_obs_norm_init', 50)):
+        for step in range(50):
+            acs = np.random.randint(0, envs.single_action_space.n, size=(agent_params['num_envs'],))
+            s, reward, terminations, truncations, infos = envs.step(acs)
+            next_ob += s[:, 3, :, :].reshape([-1, 1, 84, 84]).tolist()
+            if len(next_ob) % (agent_params['num_steps'] * agent_params['num_envs']) == 0:
+                next_ob = np.stack(next_ob)
+                agent.obs_rms.update(next_ob)
+                next_ob = []
+        print("Done obs_rms init.")
+
+
+
 
     for iteration in tqdm(range(agent_params['num_iterations'])):
         # Annealing the rate if instructed to do so.
@@ -155,6 +191,7 @@ def main(seed):
             logprobs[step] = logprob
 
             # TRY NOT TO MODIFY: execute the game and log data.
+            noop = noop + 1 if torch.any(action == 0) else noop
             next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
             next_done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(device).view(-1)
@@ -162,8 +199,21 @@ def main(seed):
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
             step+=1
             
-
-        loss += agent.train(obs, actions, rewards, logprobs, dones, values, next_obs, next_done)
+        if code == -5:
+            # end of rollout collection: call PPO_RND_Agent.train()
+            loss, rnd_loss = agent.train(
+            obs=obs.cpu(),              # pass CPU tensors; PPO_RND_Agent will .to(device)
+            actions=actions.cpu(),
+            ext_rewards=rewards.cpu(),
+            logprobs=logprobs.cpu(),
+            dones=dones.cpu(),
+            ext_values=values.cpu(),
+            next_obs=next_obs.cpu(),
+            next_done=next_done.cpu(),
+            ) 
+        else:
+            loss += agent.train(obs, actions, rewards, logprobs, dones, values, next_obs, next_done)
+        
             
 
     envs.close()
@@ -174,7 +224,20 @@ def main(seed):
 
 if __name__ == "__main__":
 
+
+    parser = argparse.ArgumentParser(description='Your script description here')
+    # Define hyperparameters as command-line arguments
+    parser.add_argument('--PPO', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--RND', action='store_true', default=False, help='Would you like to use the standrad RND')
+    args = parser.parse_args()
+    ppo = args.ppo
+    rnd = args.rnd
+
+    if ppo: code =-4
+    elif rnd : code = -5
+
+
     seeds = 3
     for s in range(seeds):
-        main(s)
+        main(s, code)
     
