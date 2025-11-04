@@ -69,13 +69,22 @@ class PPO_Agent(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.network(x, return_critic = True)
     
 
-    def get_clear_action(self, x):
+    def get_clear_action(self, x:np.array, evaluate = True):
+
         if self.training_steps < self.head_start:
-            return np.random.choice(self.num_actions)
+            if evaluate: return np.random.choice(self.num_actions)
+            return np.random.choice(self.num_actions, size=x.shape[0])
+
         x = torch.from_numpy(x).to(self.device)
         with torch.no_grad():
             logits = self.network(x, return_actor = True)
-        return np.argmax(logits.cpu().detach().numpy())
+
+        if evaluate:  
+            return np.argmax(logits.cpu().detach().numpy()) 
+        return np.argmax(logits.cpu().detach().numpy(), axis=1) 
+
+        
+        
     
 
     def reduce_lr(self, iteration, ):
@@ -232,8 +241,8 @@ class PPO_RND_Agent:
     def get_action_and_value(self, x):
 
         _, log_probs, probs, critic = self.ppo_agent.get_action_and_value(x)
-        action = self.ppo_agent.get_clear_action(x)
-        return action, log_probs, probs, critic
+        action = self.ppo_agent.get_clear_action(x.detach().cpu().numpy(), evaluate=False)
+        return torch.from_numpy(action), log_probs, probs, critic
 
     def get_variance(self, normilized = True):
         if normilized:

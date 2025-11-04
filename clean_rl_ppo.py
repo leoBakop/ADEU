@@ -33,8 +33,6 @@ def make_env(env_id, idx, capture_video, run_name):
             dtype=np.float32
         )
         
-        
-       
         return env
 
     return thunk
@@ -143,7 +141,7 @@ def main(seed, code, dom):
         print("Initializing obs_rms for RND...")
         next_ob = []
         for step in range(agent_params['num_steps'] * agent_params.get('num_iterations_obs_norm_init', 50)):
-        #for step in range(50):
+        #for step in range(5):
             acs = np.random.randint(0, envs.single_action_space.n, size=(agent_params['num_envs'],))
             s, reward, terminations, truncations, infos = envs.step(acs)
             next_ob += s[:, 3, :, :].reshape([-1, 1, 84, 84]).tolist()
