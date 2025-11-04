@@ -88,7 +88,8 @@ def main(seed, code, dom):
         debug=False 
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    print(f'This experiment will run in {device}')
+    
     # env setup
     envs = gym.vector.SyncVectorEnv(
         [make_env(agent_params['env_id'], i,capture_video=False, run_name=run_name) for i in range(agent_params['num_envs'])],
@@ -141,8 +142,8 @@ def main(seed, code, dom):
         # initialize obs_rms for rnd (random actions)
         print("Initializing obs_rms for RND...")
         next_ob = []
-        #for step in range(agent_params['num_steps'] * agent_params.get('num_iterations_obs_norm_init', 50)):
-        for step in range(50):
+        for step in range(agent_params['num_steps'] * agent_params.get('num_iterations_obs_norm_init', 50)):
+        #for step in range(50):
             acs = np.random.randint(0, envs.single_action_space.n, size=(agent_params['num_envs'],))
             s, reward, terminations, truncations, infos = envs.step(acs)
             next_ob += s[:, 3, :, :].reshape([-1, 1, 84, 84]).tolist()

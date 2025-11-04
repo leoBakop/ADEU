@@ -230,7 +230,10 @@ class PPO_RND_Agent:
         return self.ppo_agent.get_clear_action(x)
     
     def get_action_and_value(self, x):
-        return self.ppo_agent.get_action_and_value(x)
+
+        _, log_probs, probs, critic = self.ppo_agent.get_action_and_value(x)
+        action = self.ppo_agent.get_clear_action(x)
+        return action, log_probs, probs, critic
 
     def get_variance(self, normilized = True):
         if normilized:
