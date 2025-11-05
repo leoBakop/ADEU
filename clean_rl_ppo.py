@@ -52,8 +52,8 @@ def main(seed, code, dom):
         # Algorithm specific arguments
         "env_id": dom,  # the id of the environment
         "total_timesteps": int(20e6),  # total timesteps of the experiments
-        "learning_rate": 2.5e-4,  # the learning rate of the optimizer
-        "num_envs": 8,  # the number of parallel game environments
+        "learning_rate": 2.5e-4 if code == -4 else 1e-4,  # the learning rate of the optimizer
+        "num_envs": 8 if code == -4 else 128,  # the number of parallel game environments
         "num_steps": 128,  # the number of steps to run in each environment per policy rollout
         "anneal_lr": True,  # Toggle learning rate annealing for policy and value networks
         "gamma": 0.99,  # the discount factor gamma
@@ -63,7 +63,7 @@ def main(seed, code, dom):
         "norm_adv": True,  # Toggles advantages normalization
         "clip_coef": 0.1,  # the surrogate clipping coefficient
         "clip_vloss": True,  # Toggles whether or not to use a clipped loss for the value function
-        "ent_coef": 0.01,  # coefficient of the entropy
+        "ent_coef": 0.01 if code==-4 else 0.001,   # coefficient of the entropy
         "vf_coef": 0.5,  # coefficient of the value function
         "max_grad_norm": 0.5,  # the maximum norm for the gradient clipping
         "target_kl": None,  # the target KL divergence threshold
@@ -96,9 +96,10 @@ def main(seed, code, dom):
 
     agent = PPO_Agent(envs, **agent_params, device=device).to(device)
     if code == -5:
-         # RND model
+        # RND model
+        
         rnd_model = PPO_RNDModel(4, envs.single_action_space.n).to(device)
-
+        
         # PPO_RND_Agent (composition)
         agent = PPO_RND_Agent(
             ppo_agent=agent,
@@ -108,7 +109,8 @@ def main(seed, code, dom):
             int_coef=agent_params.get('int_coef', 1.0),
             ext_coef=agent_params.get('ext_coef', 2.0),
             int_gamma=agent_params.get('int_gamma', 0.99)
-    )
+        )
+        
     
 
     # ALGO Logic: Storage setup
