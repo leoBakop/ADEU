@@ -230,7 +230,6 @@ def reverse_code(code):
     if code == 1: return 'ez_adeu'
 
 if __name__=='__main__':
-    seeds = 10
 
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
@@ -269,8 +268,8 @@ if __name__=='__main__':
    
     code = code_creation(agent_args)
     consecutive_fails = 0
-    for s in range(5, seeds):
-        for n in range(3, 101, 3):
+    for s in range(7):
+        for n in range(51, 100, 3):
             failed = main(n, seed=s, code = code, rho = rho)
             consecutive_fails = consecutive_fails + 1 if failed else 0
             if consecutive_fails > 2:

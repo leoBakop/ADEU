@@ -53,7 +53,7 @@ def load_results(alg, path):
             result_among_seeds = exponential_smoothing(
                 np.array(result_among_seeds),
                 np.arange(len(result_among_seeds)),
-                smoothing_param=0.5
+                smoothing_param=1
             )
             mean_timesteps = np.mean(np.array(result_among_seeds))
             std_timesteps = np.std(np.array(result_among_seeds), ddof=0)
@@ -75,7 +75,7 @@ def plot_results(mean_values, std_errors, path):
         upper_bound = np.clip(mean + std, a_min = 0,  a_max = MAXIMUM_TIMESTEPS)
         lower_bound = np.clip(mean - std, a_min = 0, a_max = MAXIMUM_TIMESTEPS)
         plt.plot(x_axis, mean, label=key)
-        plt.fill_between(x_axis, lower_bound, upper_bound, alpha=0.2)
+        plt.fill_between(x_axis, lower_bound, upper_bound, alpha=0.1)
     plt.ylabel('Timesteps')
     plt.xlabel('N')
     plt.legend()
