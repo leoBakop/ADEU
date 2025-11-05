@@ -141,8 +141,8 @@ def main(seed, code, dom):
         # initialize obs_rms for rnd (random actions)
         print("Initializing obs_rms for RND...")
         next_ob = []
-        #for step in range(agent_params['num_steps'] * agent_params.get('num_iterations_obs_norm_init', 50)):
-        for step in range(5):
+        for step in range(agent_params['num_steps'] * agent_params.get('num_iterations_obs_norm_init', 50)):
+        #for step in range(5):
             acs = np.random.randint(0, envs.single_action_space.n, size=(agent_params['num_envs'],))
             s, reward, terminations, truncations, infos = envs.step(acs)
             next_ob += s[:, 3, :, :].reshape([-1, 1, 84, 84]).tolist()
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
     parser.add_argument('--PPO', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
-    parser.add_argument('--RND', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--RND', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
 
     args = parser.parse_args()
