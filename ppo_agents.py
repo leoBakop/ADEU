@@ -238,11 +238,14 @@ class PPO_RND_Agent:
     def get_clear_action(self, x):
         return self.ppo_agent.get_clear_action(x)
     
-    def get_action_and_value(self, x):
+    def get_action_and_value(self, x, action=None):
+        logits = self.network(x, return_actor = True)
+        probs = Categorical(logits=logits)
+        if action is None:
+            #action = probs.sample()
+            action = torch.argmax(logits)
+        return action, probs.log_prob(action), probs.entropy(), self.network(x, return_critic = True)
 
-        _, log_probs, probs, critic = self.ppo_agent.get_action_and_value(x)
-        action = self.ppo_agent.get_clear_action(x.detach().cpu().numpy(), evaluate=False)
-        return torch.from_numpy(action), log_probs, probs, critic
 
     def get_variance(self, normilized = True):
         if normilized:
