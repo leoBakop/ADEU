@@ -232,7 +232,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
     parser.add_argument('--PPO', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
-    parser.add_argument('--RND', action='store_true', default=True, help='Would you like to use the standrad RND')
+    parser.add_argument('--RND', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
 
     args = parser.parse_args()
