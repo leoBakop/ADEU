@@ -131,6 +131,7 @@ def main(seed, code, dom):
 
     rewardss = 0
     loss = 0
+    rnd_loss = 0
     noop = 0
     episodes_till_evaluate = 1
 
@@ -168,13 +169,15 @@ def main(seed, code, dom):
                         'mean episodic training reward': rewardss/episodes_till_evaluate,
                         'frequency of noop (episodic)': noop/episodes_till_evaluate,
                         'mean variance at every timestep' : variance,
-                        'variance over greediness': variance/q_mean if q_mean!=0 else -1
+                        'variance over greediness': variance/q_mean if q_mean!=0 else -1,
+                        'rnd loss': rnd_loss if code == -5 else 0
                         })
             episodes_till_evaluate = 0
             cumm_eval_rewards.append(cumulative_evaluation_reward)
             rewardss = 0
             loss = 0
             noop = 0
+            rnd_loss = 0
 
         for step in range(agent_params['num_steps']):
 
@@ -200,7 +203,7 @@ def main(seed, code, dom):
             
         if code == -5:
             # end of rollout collection: call PPO_RND_Agent.train()
-            loss, rnd_loss = agent.train(
+            l, rnd_l = agent.train(
             obs=obs.cpu(),              # pass CPU tensors; PPO_RND_Agent will .to(device)
             actions=actions.cpu(),
             ext_rewards=rewards.cpu(),
@@ -209,14 +212,16 @@ def main(seed, code, dom):
             ext_values=values.cpu(),
             next_obs=next_obs.cpu(),
             next_done=next_done.cpu(),
-            ) 
+            )
+            loss += l
+            rnd_loss += rnd_l
         else:
             loss += agent.train(obs, actions, rewards, logprobs, dones, values, next_obs, next_done)
         
             
 
     envs.close()
-
+    wandb.finish()
 
 
 
@@ -227,7 +232,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Your script description here')
     # Define hyperparameters as command-line arguments
     parser.add_argument('--PPO', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
-    parser.add_argument('--RND', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--RND', action='store_true', default=True, help='Would you like to use the standrad RND')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
 
     args = parser.parse_args()
