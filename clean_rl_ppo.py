@@ -51,12 +51,12 @@ def main(seed, code, dom):
     agent_params = {
         # Algorithm specific arguments
         "env_id": dom,  # the id of the environment
-        "total_timesteps": int(20e6),  # total timesteps of the experiments
+        "total_timesteps": int(20e8),  # total timesteps of the experiments
         "learning_rate": 2.5e-4 if code == -4 else 1e-4,  # the learning rate of the optimizer
         "num_envs": 8 if code == -4 else 128,  # the number of parallel game environments
         "num_steps": 128,  # the number of steps to run in each environment per policy rollout
         "anneal_lr": True,  # Toggle learning rate annealing for policy and value networks
-        "gamma": 0.99,  # the discount factor gamma
+        "gamma": 0.99 if code == -4 else 0.999,  # the discount factor gamma
         "gae_lambda": 0.95,  # the lambda for the general advantage estimation
         "num_minibatches": 4,  # the number of mini-batches
         "update_epochs": 4,  # the K epochs to update the policy

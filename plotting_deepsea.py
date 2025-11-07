@@ -53,7 +53,7 @@ def load_results(alg, path):
             result_among_seeds = exponential_smoothing(
                 np.array(result_among_seeds),
                 np.arange(len(result_among_seeds)),
-                smoothing_param=1
+                smoothing_param=0
             )
             mean_timesteps = np.mean(np.array(result_among_seeds))
             std_timesteps = np.std(np.array(result_among_seeds), ddof=0)
