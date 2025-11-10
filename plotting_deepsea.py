@@ -3,7 +3,7 @@ import numpy as np
 import os
 from process_local_data import exponential_smoothing
 
-MAXIMUM_SEEDS = 5
+MAXIMUM_SEEDS = 8
 MAXIMUM_TIMESTEPS = int(1e6)
 
 
@@ -53,7 +53,7 @@ def load_results(alg, path):
             result_among_seeds = exponential_smoothing(
                 np.array(result_among_seeds),
                 np.arange(len(result_among_seeds)),
-                smoothing_param=0
+                smoothing_param=1
             )
             mean_timesteps = np.mean(np.array(result_among_seeds))
             std_timesteps = np.std(np.array(result_among_seeds), ddof=0)
