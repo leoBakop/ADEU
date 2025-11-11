@@ -2,6 +2,8 @@ import gymnasium as gym
 from gymnasium import Wrapper
 import numpy as np
 from atari_utils import *
+MAXIMUM_TIMESTEPS = 100_000
+
 
 class AtariEnv(Wrapper):
     def __init__(self, 

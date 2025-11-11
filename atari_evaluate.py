@@ -1,14 +1,14 @@
 
 import gymnasium as gym
 import ale_py
-from atari_env import AtariEnv
+from atari_env import AtariEnv, MAXIMUM_TIMESTEPS
 import numpy as np
 from bootstrap_dqn_agent import BootDQN
 from ppo_agents import PPO_Agent
 
 
-def evaluate(agent:BootDQN|PPO_Agent, domain, timesteps, seed, evaluation_episodes = 30):
-    env = make_environment(domain, timesteps)
+def evaluate(agent:BootDQN|PPO_Agent, domain, seed, evaluation_episodes = 30):
+    env = make_environment(domain, MAXIMUM_TIMESTEPS)
     obs, _ = env.reset(seed=seed)
     cumulative_rewards_per_episode = np.zeros(evaluation_episodes)
     

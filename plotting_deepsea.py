@@ -3,7 +3,7 @@ import numpy as np
 import os
 from process_local_data import exponential_smoothing
 
-MAXIMUM_SEEDS = 8
+MAXIMUM_SEEDS = 10
 MAXIMUM_TIMESTEPS = int(1e6)
 
 
@@ -67,7 +67,7 @@ def load_results(alg, path):
 
 def plot_results(mean_values, std_errors, path):
     plt.figure(figsize=(10, 5))
-    plt.title('Timesteps required to solve an N grid DeepSea')
+    plt.title(r'Timesteps required to solve the DeepSea domain in an $N\times N$ grid')
     for key in mean_values.keys():
         x_axis = np.arange(3, 3*len(mean_values[key]) + 1, 3)
         mean = np.array(mean_values[key])

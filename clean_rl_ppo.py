@@ -9,9 +9,10 @@ import torch
 import wandb
 from atari import wandb_session
 from network import PPO_RNDModel
-from atari_env import AtariEnv
+from atari_env import AtariEnv, MAXIMUM_TIMESTEPS
 from ppo_agents import *
 from atari_evaluate import evaluate
+from atari import code_creation, reverse_code
 from tqdm import tqdm
 import argparse
 
@@ -23,7 +24,7 @@ def make_env(env_id, idx, capture_video, run_name):
 
         
         #we are setting the frameskip equal to 1 (so in practice no frameskip). We then apply it using the Wrapper
-        env = gym.make(env_id, repeat_action_probability = 0.25, frameskip = 1,  max_episode_steps=10_000,)# render_mode = 'human')
+        env = gym.make(env_id, repeat_action_probability = 0.25, frameskip = 1,  max_episode_steps=MAXIMUM_TIMESTEPS,)# render_mode = 'human')
         env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
         obs, _ = env.reset()
         env.observation_space = gym.spaces.Box(
@@ -51,9 +52,9 @@ def main(seed, code, dom):
     agent_params = {
         # Algorithm specific arguments
         "env_id": dom,  # the id of the environment
-        "total_timesteps": int(20e8),  # total timesteps of the experiments
-        "learning_rate": 2.5e-4 if code == -4 else 1e-4,  # the learning rate of the optimizer
-        "num_envs": 8 if code == -4 else 128,  # the number of parallel game environments
+        "total_timesteps": int(20e6),  # total timesteps of the experiments
+        "learning_rate": 1e-4 if code == -5 else 2.5e-4,  # the learning rate of the optimizer
+        "num_envs": 128  if code == -5 else 8,  # the number of parallel game environments
         "num_steps": 128,  # the number of steps to run in each environment per policy rollout
         "anneal_lr": True,  # Toggle learning rate annealing for policy and value networks
         "gamma": 0.99 if code == -4 else 0.999,  # the discount factor gamma
@@ -63,7 +64,7 @@ def main(seed, code, dom):
         "norm_adv": True,  # Toggles advantages normalization
         "clip_coef": 0.1,  # the surrogate clipping coefficient
         "clip_vloss": True,  # Toggles whether or not to use a clipped loss for the value function
-        "ent_coef": 0.01 if code==-4 else 0.001,   # coefficient of the entropy
+        "ent_coef": 0.001 if code in [-5, 4] else 0.01,   # coefficient of the entropy
         "vf_coef": 0.5,  # coefficient of the value function
         "max_grad_norm": 0.5,  # the maximum norm for the gradient clipping
         "target_kl": None,  # the target KL divergence threshold
@@ -75,7 +76,7 @@ def main(seed, code, dom):
     agent_params ['batch_size'] = int(agent_params['num_envs'] * agent_params['num_steps'])
     agent_params["minibatch_size"] = int(agent_params['batch_size'] // agent_params['num_minibatches'])
     agent_params['num_iterations'] = agent_params['total_timesteps'] // agent_params['batch_size']
-    run_name = f"PPO, seed {seed}" if code == -4 else f"RND_PPO, seed {seed}"
+    run_name = reverse_code(code)+f', seed {seed}'
 
     wandb_session(
         domain = agent_params['env_id'],
@@ -94,7 +95,10 @@ def main(seed, code, dom):
     )
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
-    agent = PPO_Agent(envs, **agent_params, device=device).to(device)
+    if code in [-4, -5]:
+        agent = PPO_Agent(envs, **agent_params, device=device).to(device)
+
+
     if code == -5:
         # RND model
         
@@ -111,6 +115,12 @@ def main(seed, code, dom):
             int_gamma=agent_params.get('int_gamma', 0.99)
         )
         
+    if code == 4:
+        agent = Two_Modes_ADEU( envs,
+                                **agent_params,
+                                device=device,
+                                starting_mode='exploration',
+                                maximum_timesteps=MAXIMUM_TIMESTEPS).to(device)
     
 
     # ALGO Logic: Storage setup
@@ -163,7 +173,7 @@ def main(seed, code, dom):
         episodes_till_evaluate+=1
 
         if iteration%evaluation_every == 0:
-            cumulative_evaluation_reward = evaluate(agent, agent_params['env_id'], timesteps = 10_000, seed = seed, evaluation_episodes=1)
+            cumulative_evaluation_reward = evaluate(agent, agent_params['env_id'], seed = seed, evaluation_episodes=30)
            
             variance, q_mean = agent.get_variance()
             wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
@@ -197,6 +207,10 @@ def main(seed, code, dom):
             # TRY NOT TO MODIFY: execute the game and log data.
             noop = noop + 1 if torch.any(action == 0) else noop
             next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
+
+            if code == 4:
+                agent.update_values_rewards(value, reward)
+
             next_done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             rewardss += reward
@@ -219,7 +233,7 @@ def main(seed, code, dom):
             rnd_loss += rnd_l
         else:
             loss += agent.train(obs, actions, rewards, logprobs, dones, values, next_obs, next_done)
-        
+            agent.reset()
             
 
     envs.close()
@@ -236,17 +250,23 @@ if __name__ == "__main__":
     parser.add_argument('--PPO', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--RND', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--two_modes_adeu', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
 
     args = parser.parse_args()
     ppo = args.PPO
     rnd = args.RND
+    two_modes_adeu = args.two_modes_adeu
     dom = args.dom
 
-    if ppo: code =-4
-    elif rnd : code = -5
+    agent_args = {
+        'ppo': ppo,
+        'rnd': rnd,
+        'two_modes_adeu': two_modes_adeu,
+    }
 
 
+    code = code_creation(agent_args)
     seeds = 3
     for s in range(seeds):
-        main(s, code, dom)
+        main(s, code, dom,)
     

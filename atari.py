@@ -3,7 +3,7 @@ import ale_py
 import os
 os.environ["SDL_RENDER_DRIVER"] = "software"
 import time
-from atari_env import AtariEnv
+from atari_env import AtariEnv, MAXIMUM_TIMESTEPS
 import wandb
 import argparse
 from tqdm import tqdm
@@ -39,7 +39,6 @@ def wandb_session(domain:str , rho, lr, name = None, code = 0, debug = False, ):
 def main(domain, 
          seed,
          code,
-         timesteps,
          rho):
     #at first let's seed everything except the environment
     set_seed(seed)
@@ -49,7 +48,7 @@ def main(domain,
     #horizon = int(10e4)
     gym.register_envs(ale_py)
     #we are setting the frameskip equal to 1 (so in practice no frameskip). We then apply it using the Wrapper
-    env = gym.make(domain, repeat_action_probability = 0.25, frameskip = 1,  max_episode_steps=timesteps,)# render_mode = 'human')
+    env = gym.make(domain, repeat_action_probability = 0.25, frameskip = 1,  max_episode_steps=MAXIMUM_TIMESTEPS,)# render_mode = 'human')
     env = AtariEnv(env, frame_stacking=4, max_no_op_frames=30)
     #agent
     if torch.cuda.is_available(): device = torch.device("cuda")
@@ -145,7 +144,7 @@ def run(seed, agent:BootDQN, env:AtariEnv, horizon,code):
     for t in tqdm(range(horizon)):
         
         if t%evaluation_every == 0:
-            cumulative_evaluation_reward = evaluate(agent, domain, timesteps, seed, evaluation_episodes=30)
+            cumulative_evaluation_reward = evaluate(agent, domain, seed, evaluation_episodes=30)
             return_q = (code == -3 ) or (code == 3) #in case of the adeu std or the Bootucb I would like also to get the mean q value among the training
             variance, q_mean = agent.get_variance(return_q)
             wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
@@ -199,17 +198,25 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic=  True
 
 def code_creation(agent_args):
-    if agent_args['dqn']: return -1
-    if agent_args['bdqn']: return -2
-    if agent_args['ucb']: return -3
-    if agent_args['adeu_std']: return 3
+    if agent_args.get('dqn', False): return -1
+    if agent_args.get('bdqn', False): return -2
+    if agent_args.get('ucb', False): return -3
+    if agent_args.get('ppo', False):  return -4
+    if agent_args.get('rnd', False) :  return -5
+
+    if agent_args.get('adeu_std', False): return 3
+    if agent_args.get('two_modes_adeu', False) : return 4
     return 0    
 
 def reverse_code(code):
     if code == -1: return 'dqn'
     if code == -2: return 'bdqn'
     if code == -3: return 'ucb'
+    if code == -4: return 'ppo'
+    if code == -5 :return 'rnd'
+
     if code == 3: return 'adeu_std'
+    if code == 4: return 'two_modes_adeu'
     return None
 if __name__ == '__main__':
 
@@ -226,7 +233,6 @@ if __name__ == '__main__':
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
-    parser.add_argument('--steps', type=int, default=10_000, help='what are the maximum timesteps per episode')
     parser.add_argument('--rho', type=float, default=.0, help='what are the maximum timesteps per episode')
     args = parser.parse_args()
 
@@ -239,7 +245,6 @@ if __name__ == '__main__':
     rho = args.rho
 
     domain = args.dom
-    timesteps = args.steps
     
     agent_args = {
         'dqn': dqn,
@@ -253,4 +258,4 @@ if __name__ == '__main__':
     code = code_creation(agent_args)
     
     for s in range(seeds):
-        main(domain, seed=s, code = code, timesteps = timesteps, rho = rho)
+        main(domain, seed=s, code = code, rho = rho)

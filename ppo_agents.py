@@ -499,3 +499,199 @@ class PPO_RND_Agent:
                 self.variance += rnd_forward_loss
 
         return ppo_loss_val, rnd_forward_loss
+    
+
+class Random_Exploration_Agent(nn.Module):
+    def __init__(self, envs):
+        super().__init__()
+        self.envs = envs
+        self.num_actions = envs.single_action_space.n
+
+    def get_action(self, state):
+        return np.random.choice(self.num_actions, size = self.envs.num_envs)
+    def train(self, obs, actions, rewards, logprobs, dones, values, next_obs, next_done):
+        return 0
+    
+    def reduce_lr(self, iteration):
+        return
+
+class Two_Modes_ADEU(nn.Module):
+
+
+    def __init__(self,
+                 envs,
+                 num_steps,
+                 gamma,
+                 batch_size,
+                 minibatch_size,
+                 gae_lambda,
+                 update_epochs,
+                 ent_coef,
+                 vf_coef,
+                 max_grad_norm,
+                 learning_rate,
+                 num_iterations,
+                 anneal_lr,
+                 device,
+                 head_start,
+                 starting_mode,
+                 maximum_timesteps,
+                 **kwargs):
+        super().__init__()
+        self.exploitation_agent = PPO_Agent(envs,
+                                            num_steps,
+                                            gamma,
+                                            batch_size,
+                                            minibatch_size,
+                                            gae_lambda,
+                                            update_epochs,
+                                            ent_coef,
+                                            vf_coef,
+                                            max_grad_norm,
+                                            learning_rate,
+                                            num_iterations,
+                                            anneal_lr,
+                                            device,
+                                            head_start,
+                                            )
+        
+        self.exploration_agent = Random_Exploration_Agent(envs)
+        self.n_envs = envs.num_envs
+        self.current_timestep = -1
+        self.maximum_timesteps = maximum_timesteps
+
+        self.k = 5
+        self.past_values = np.zeros([maximum_timesteps, self.n_envs] )
+        self.past_rewards = np.zeros([maximum_timesteps, self.n_envs])
+        self.previous_d_promises = np.zeros([maximum_timesteps, self.n_envs])
+        self.gamma = gamma
+        self.homeostasis_threshold = np.zeros([maximum_timesteps,self.n_envs]) # we inityiallize it to 0 since we would assume that the uncertainty for the first ever episode is high and we would like the threshold to be zero in order to explore
+        self.homeostasis_rho = 0.01
+        self.uncertainty = 0
+        self.episodes_with_no_evaluation = 1
+        self.starting_mode = starting_mode
+        self.device = device
+        
+
+    def reset (self, ):
+        self.current_timestep = -1
+        self.past_values = np.zeros([self.maximum_timesteps, self.n_envs] )
+        self.past_rewards = np.zeros([self.maximum_timesteps, self.n_envs])
+        self.homeostasis_threshold = self.homeostasis()
+        self.episodes_with_no_evaluation+=1
+    
+    def reduce_lr(self, iteration):
+        self.exploitation_agent.reduce_lr(iteration)
+        self.exploration_agent.reduce_lr(iteration)
+    
+    def get_clear_action(self, state):
+        return self.exploitation_agent.get_clear_action(state, evaluate = True)
+
+    def get_variance(self, ):
+        retval = self.uncertainty/self.episodes_with_no_evaluation
+        self.episodes_with_no_evaluation = 0
+        return retval, 0
+    
+    def update_values_rewards(self, values, rewards):
+        self.past_values[self.current_timestep, :] = values.detach().cpu().numpy()
+        self.past_rewards[self.current_timestep, :] = rewards
+        return
+
+
+
+    def get_action_and_value(self, state):
+        self.current_timestep+=1
+        exploitation_action, log_prob, entropy, exploiation_value = self.exploitation_agent.get_action_and_value(x = state)
+        uncertainty = self.calculate_uncertainty(exploiation_value, ) #uncertainty is (num_envs, 1)
+
+        
+
+        self.uncertainty += np.mean(uncertainty)
+        self.previous_d_promises[self.current_timestep,:] = uncertainty[:]
+
+        actions = []
+        log_probs = []
+        entropys = []
+        exploiation_values = []
+
+        for i in range(self.n_envs):
+
+            if uncertainty[i] < self.homeostasis_threshold[self.current_timestep, i]:
+                #uncertainty is low, exploit
+                actions.append(exploitation_action[i])
+                log_probs.append(log_prob[i])
+                entropys.append(entropy[i])
+                exploiation_values.append(exploiation_value[i])
+            else:
+                #the action in the next couple of lines is THE SAME ONE (but one is in torch)
+                action = self.exploration_agent.get_action(state)
+                action , log_prob, entropy, exploration_value = self.exploitation_agent.get_action_and_value(state, action = torch.from_numpy(action).to(self.device))
+                
+                actions.append(action[i])
+                log_probs.append(log_prob[i])
+                entropys.append(entropy[i])
+                exploiation_values.append(exploration_value[i])
+        actions = torch.Tensor(actions).to(self.device)
+        actions = torch.round(actions, decimals=0).int()
+
+        return actions, torch.Tensor(log_probs).to(self.device), torch.Tensor(entropys).to(self.device), torch.Tensor(exploiation_values).to(self.device), 
+
+    
+    def calculate_uncertainty(self, value:torch.Tensor):
+
+        if self.current_timestep < self.k:
+            if self.starting_mode == 'exploration' :
+                return np.ones(self.n_envs)
+            return np.zeros(self.n_envs)
+
+        value = value.detach().cpu().numpy()
+        v_t_minus_k = self.past_values[self.current_timestep - self.k] if (self.current_timestep - self.k) >= 0 \
+                                                                       else 0
+        r_t_minus_k = self.past_rewards[self.current_timestep - self.k : self.current_timestep ] if (self.current_timestep - self.k) >= 0 \
+                                                                       else 0
+        s = np.zeros(self.n_envs)
+        for i in range(self.n_envs):
+            s[i] = (np.sum(np.array([self.gamma **i *r_t_minus_k[max(-i-1, -5)]  for i in range(r_t_minus_k.size)])))
+
+        D_promise = v_t_minus_k - s - self.gamma**self.k - np.squeeze(value)
+        D_promise = np.abs(D_promise)
+        return D_promise
+    
+    def homeostasis(self, ):
+
+        rho = self.homeostasis_rho
+        x_values = self.previous_d_promises
+        T = len(x_values)
+
+        # Initialize variables
+        x_bar = 0.0
+        x2_bar = 1.0
+        x_plus_bar = 1.0
+
+        y = np.zeros([T, self.n_envs])
+
+        for t in range(T):
+            x_t = x_values[t]
+            tau = min(t + 1, 100 / rho)  # t starts at 0, so use (t+1)
+
+            # Update moving average and variance
+            x_bar = (1 - 1 / tau) * x_bar + (1 / tau) * x_t
+            x2_bar = (1 - 1 / tau) * x2_bar + (1 / tau) * (x_t - x_bar) ** 2
+
+            # Standardize and exponentiate
+            x_plus = np.exp((x_t - x_bar) / np.sqrt(x2_bar + 1e-8))  # small epsilon for stability
+
+            # Update transformed moving average
+            x_plus_bar = (1 - 1 / tau) * x_plus_bar + (1 / tau) * x_plus
+
+            # Sample from Bernoulli
+            p = np.minimum(np.ones(self.n_envs), rho * x_plus / (x_plus_bar + 1e-8))
+            y[t, :] = np.random.binomial(1, p)
+
+        return y
+    
+    def train(self, obs, actions, rewards, logprobs, dones, values, next_obs, next_done):
+        loss = 0
+        loss += self.exploitation_agent.train(obs, actions, rewards, logprobs, dones, values, next_obs, next_done)
+        loss += self.exploration_agent.train(obs, actions, rewards, logprobs, dones, values, next_obs, next_done)
+        return loss
