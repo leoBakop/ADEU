@@ -250,7 +250,7 @@ if __name__ == "__main__":
     parser.add_argument('--PPO', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--RND', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
-    parser.add_argument('--two_modes_adeu', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--two_modes_adeu', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
 
     args = parser.parse_args()
     ppo = args.PPO
