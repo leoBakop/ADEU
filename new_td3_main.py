@@ -435,7 +435,7 @@ if __name__ == '__main__':
                                            rho = rho)
     print(f"{domain} + code:{code}")
 
-    for s in range(2,seeds):
+    for s in range(seeds):
         main(seed = s, 
              horizon=horizon, 
              timesteps=timesteps, 
