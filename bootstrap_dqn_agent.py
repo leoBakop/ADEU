@@ -661,7 +661,7 @@ class Two_Modes_ADEU_DQN():
         with torch.no_grad():
             qs = self.exploitation_agent.policy_net(x = state, k = 0).detach().cpu().numpy()
         action = np.argmax(qs)
-        return action, qs[action]
+        return action, qs.flatten()[action] 
 
     def get_variance(self, return_q = None):
         retval = self.uncertainty/self.episodes_with_no_evaluation

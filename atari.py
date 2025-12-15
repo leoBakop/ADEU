@@ -42,7 +42,7 @@ def main(domain,
          rho):
     #at first let's seed everything except the environment
     set_seed(seed)
-    debug = False
+    debug = True
     #environment
     horizon = int(20e6)
     #horizon = int(10e4)
@@ -73,8 +73,8 @@ def main(domain,
                 'beta':0.99, 
                 'train_frequency':4, 
                 'target_update':10_000,
-                'head_start':50_000,
-                #'head_start' : 64,
+                #'head_start':50_000,
+                'head_start' : 64,
                 'gamma':0.99,
                 'cnn' : True,
                 'state_size':-1
