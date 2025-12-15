@@ -173,16 +173,20 @@ def main(seed, code, dom):
         episodes_till_evaluate+=1
 
         if iteration%evaluation_every == 0:
-            cumulative_evaluation_reward = evaluate(agent, agent_params['env_id'], seed = seed, evaluation_episodes=30)
+            cumulative_evaluation_reward = evaluate(agent, agent_params['env_id'], seed = seed, evaluation_episodes=1)
            
             variance, q_mean = agent.get_variance()
+            tradeoff = 0
+            if code == 4:
+                tradeoff = agent.explore_vs_exploit()
             wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
                         'mean episodic loss during training': loss/episodes_till_evaluate,
                         'mean episodic training reward': rewardss/episodes_till_evaluate,
                         'frequency of noop (episodic)': noop/episodes_till_evaluate,
                         'mean variance at every timestep' : variance,
                         'variance over greediness': variance/q_mean if q_mean!=0 else -1,
-                        'rnd loss': rnd_loss if code == -5 else 0
+                        'rnd loss': rnd_loss if code == -5 else 0,
+                        'explore vs exploit': tradeoff,
                         })
             episodes_till_evaluate = 0
             cumm_eval_rewards.append(cumulative_evaluation_reward)
@@ -212,28 +216,29 @@ def main(seed, code, dom):
                 agent.update_values_rewards(value, reward)
 
             next_done = np.logical_or(terminations, truncations)
+            if np.where(next_done)[0].size > 0:
+                agent.reset(environments = np.where(next_done)[0])
             rewards[step] = torch.tensor(reward).to(device).view(-1)
-            rewardss += reward
+            rewardss += np.mean(reward)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
             step+=1
             
         if code == -5:
             # end of rollout collection: call PPO_RND_Agent.train()
             l, rnd_l = agent.train(
-            obs=obs.cpu(),              # pass CPU tensors; PPO_RND_Agent will .to(device)
-            actions=actions.cpu(),
-            ext_rewards=rewards.cpu(),
-            logprobs=logprobs.cpu(),
-            dones=dones.cpu(),
-            ext_values=values.cpu(),
-            next_obs=next_obs.cpu(),
-            next_done=next_done.cpu(),
+                obs=obs.cpu(),              # pass CPU tensors; PPO_RND_Agent will .to(device)
+                actions=actions.cpu(),
+                ext_rewards=rewards.cpu(),
+                logprobs=logprobs.cpu(),
+                dones=dones.cpu(),
+                ext_values=values.cpu(),
+                next_obs=next_obs.cpu(),
+                next_done=next_done.cpu(),
             )
             loss += l
             rnd_loss += rnd_l
         else:
             loss += agent.train(obs, actions, rewards, logprobs, dones, values, next_obs, next_done)
-            agent.reset()
             
 
     envs.close()
@@ -250,7 +255,7 @@ if __name__ == "__main__":
     parser.add_argument('--PPO', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
     parser.add_argument('--RND', action='store_true', default=False, help='Would you like to use the standrad RND')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
-    parser.add_argument('--two_modes_adeu', action='store_true', default=False, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--two_modes_adeu', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
 
     args = parser.parse_args()
     ppo = args.PPO

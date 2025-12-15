@@ -242,8 +242,8 @@ class PPO_RND_Agent:
         logits = self.ppo_agent.network(x, return_actor = True)
         probs = Categorical(logits=logits)
         if action is None:
-            #action = probs.sample()
-            action = torch.argmax(logits, axis = 1)
+            action = probs.sample()
+            #action = torch.argmax(logits, axis = 1)
         return action, probs.log_prob(action), probs.entropy(), self.ppo_agent.network(x, return_critic = True)
 
 
