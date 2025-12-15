@@ -583,10 +583,12 @@ class Two_Modes_ADEU(nn.Module):
         self.explore = 0
         self.exploit = 0
         return retval
-    def reset (self, ):
+    
+    def reset (self, environments):
         self.current_timestep = -1
-        self.past_values = np.zeros([self.maximum_timesteps, self.n_envs] )
-        self.past_rewards = np.zeros([self.maximum_timesteps, self.n_envs])
+        for e in environments:
+            self.past_values[:,e] = np.zeros([self.maximum_timesteps, ] )
+            self.past_rewards[:,e] = np.zeros([self.maximum_timesteps, ])
         self.homeostasis_threshold = self.homeostasis()
         self.episodes_with_no_evaluation+=1
     
