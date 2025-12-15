@@ -571,8 +571,18 @@ class Two_Modes_ADEU(nn.Module):
         self.episodes_with_no_evaluation = 1
         self.starting_mode = starting_mode
         self.device = device
-        
+        self.exploit = 0
+        self.explore = 0
 
+
+    def explore_vs_exploit(self, ):
+        explore = self.explore
+        exploit = self.exploit
+
+        retval = explore - exploit
+        self.explore = 0
+        self.exploit = 0
+        return retval
     def reset (self, ):
         self.current_timestep = -1
         self.past_values = np.zeros([self.maximum_timesteps, self.n_envs] )
@@ -621,12 +631,13 @@ class Two_Modes_ADEU(nn.Module):
                 actions.append(exploitation_action[i])
                 log_probs.append(log_prob[i])
                 entropys.append(entropy[i])
+                self.exploit+=1
                 exploiation_values.append(exploiation_value[i])
             else:
                 #the action in the next couple of lines is THE SAME ONE (but one is in torch)
                 action = self.exploration_agent.get_action(state)
                 action , log_prob, entropy, exploration_value = self.exploitation_agent.get_action_and_value(state, action = torch.from_numpy(action).to(self.device))
-                
+                self.explore+=1
                 actions.append(action[i])
                 log_probs.append(log_prob[i])
                 entropys.append(entropy[i])
