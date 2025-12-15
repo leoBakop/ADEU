@@ -75,7 +75,10 @@ def main(domain,
                 'target_update':10_000,
                 'head_start':50_000,
                 #'head_start' : 64,
-                'gamma':0.99
+                'gamma':0.99,
+                'cnn' : True,
+                'state_size':-1
+
     }
 
 
@@ -99,6 +102,15 @@ def main(domain,
         maximum_reward = 1 #we now that from the Wrapper
         agents_parameters['initial_tau'] = 1 #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
         agent = Adeu_Std(**agents_parameters)
+    if code == 4:
+        agents_parameters['initial_tau'] = 1 #This is a known upper bound (see Sutton & Barto 2018, Bertsekas 2019 etc)
+        agents_parameters['final_tau'] = 0.01
+        agents_parameters['exploration_duration'] = int(0.5*horizon)
+        agents_parameters['epsilon_greedy'] = False
+        
+        agents_parameters['maximum_timesteps'] = MAXIMUM_TIMESTEPS
+        agents_parameters['starting_mode'] = 'exploration'
+        agent = Two_Modes_ADEU_DQN(**agents_parameters)
     
     name = reverse_code(code)+f', seed {seed}'
     wandb_session(domain = domain, code=code, debug = debug, rho = rho, name = name, lr = agents_parameters['learning_rate'])
@@ -130,7 +142,7 @@ def store(path,agent:BootDQN, cumulative_rewards, agent_parameters:dict):
 
     agent.save(path)
 
-def run(seed, agent:BootDQN, env:AtariEnv, horizon,code):
+def run(seed, agent:BootDQN | Two_Modes_ADEU_DQN, env:AtariEnv, horizon,code):
     
     loss = 0
     rewards = 0
@@ -139,7 +151,7 @@ def run(seed, agent:BootDQN, env:AtariEnv, horizon,code):
     cumm_eval_rewards = []
     
     obs, info = env.reset(seed=seed)
-    evaluation_every = int(horizon//100)
+    evaluation_every = int(horizon//50)
     
     for t in tqdm(range(horizon)):
         
@@ -163,7 +175,8 @@ def run(seed, agent:BootDQN, env:AtariEnv, horizon,code):
         action = agent.get_action(obs)
         noop = noop+1 if action == 0 else noop
 
-        new_obs, reward, terminated, info = env.step(action)
+        new_obs, reward, terminated,truncated, info = env.step(action)
+        terminated = terminated or truncated
         l = agent.step(state = obs,
                 action = action,
                 reward = reward,
@@ -230,6 +243,7 @@ if __name__ == '__main__':
     parser.add_argument('--BDQN', action='store_true', default=False, help='Use bootstrap DQN')
     parser.add_argument('--UCB', action='store_true', default=False, help='Use UCB built on top of BDQN')
     parser.add_argument('--adeu_std', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
+    parser.add_argument('--two_modes_adeu', action='store_true', default=True, help='Use the ensebmle method for measuring uncertainty')
     parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
     parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
     parser.add_argument('--dom', type=str, default='ALE/Pong-v5', help='In what domain would you like to the agent to be tested')
@@ -241,6 +255,7 @@ if __name__ == '__main__':
     bdqn = args.BDQN
     ucb = args.UCB
     adeu_std = args.adeu_std
+    two_modes_adeu = args.two_modes_adeu
 
     rho = args.rho
 
@@ -250,7 +265,8 @@ if __name__ == '__main__':
         'dqn': dqn,
         'bdqn': bdqn,
         'ucb': ucb,
-        'adeu_std': adeu_std
+        'adeu_std': adeu_std,
+        'two_modes_adeu' : two_modes_adeu
     }
 
 

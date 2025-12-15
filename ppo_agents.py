@@ -653,7 +653,7 @@ class Two_Modes_ADEU(nn.Module):
         for i in range(self.n_envs):
             s[i] = (np.sum(np.array([self.gamma **i *r_t_minus_k[max(-i-1, -5)]  for i in range(r_t_minus_k.size)])))
 
-        D_promise = v_t_minus_k - s - self.gamma**self.k - np.squeeze(value)
+        D_promise = v_t_minus_k - s - (self.gamma**self.k)* np.squeeze(value)
         D_promise = np.abs(D_promise)
         return D_promise
     

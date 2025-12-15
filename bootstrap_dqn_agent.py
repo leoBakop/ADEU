@@ -110,7 +110,8 @@ class BootDQN():
         if self.steps < self.head_start:
             return np.random.choice(self.num_actions, size = 1)[0] #in that way we do not allow the agent to use the do nothing action
         state = torch.from_numpy(state).to(self.device)
-        qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
+        with torch.no_grad():
+            qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
         self.update_variance(variance = 0, q = 0)
         action = np.argmax(qs) 
         return action
@@ -125,7 +126,8 @@ class BootDQN():
         if self.steps < self.head_start:
             return np.random.choice(self.num_actions, size = 1)[0]
         state = torch.from_numpy(state).to(self.device)
-        q_heads = self.policy_net(x = state)
+        with torch.no_grad():
+            q_heads = self.policy_net(x = state)
         q_heads = [t.detach().cpu().numpy() for t in q_heads]
         action = majority_vote_action(q_heads)
         return action
@@ -268,7 +270,8 @@ class DQN(BootDQN):
                 return self.get_clear_action(state)
         #otherwise, we have boltzamm exploration
         state = torch.from_numpy(state).to(self.device)
-        qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
+        with torch.no_grad():
+            qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
         qs = qs.reshape(-1)
         
         tau = self.temperature[self.steps if self.steps < self.temperature.shape[0] else -1]
@@ -287,7 +290,8 @@ class DQN(BootDQN):
         if self.steps < self.head_start:
             return np.random.choice(self.num_actions, size = 1)[0]
         state = torch.from_numpy(state).to(self.device)
-        qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
+        with torch.no_grad():
+            qs = self.policy_net(x = state, k = self.current_head).detach().cpu().numpy()
         return np.argmax(qs)
 
 
@@ -544,43 +548,6 @@ class EZ_ADEU(DQN):
         self.n = 0
         self.explored = False
 
-class PPO():
-    '''
-    This class implements the discrete action space PPO algorith as implemented in Clean RL. I will have to cite this paper.
-    no other changes have been made.
-    '''
-    
-class Agent(nn.Module):
-    def __init__(self, envs):
-        
-        super().__init__()
-        self.network = nn.Sequential(
-            layer_init(nn.Conv2d(4, 32, 8, stride=4)),
-            nn.ReLU(),
-            layer_init(nn.Conv2d(32, 64, 4, stride=2)),
-            nn.ReLU(),
-            layer_init(nn.Conv2d(64, 64, 3, stride=1)),
-            nn.ReLU(),
-            nn.Flatten(),
-            layer_init(nn.Linear(64 * 7 * 7, 512)),
-            nn.ReLU(),
-        )
-        self.actor = layer_init(nn.Linear(512, envs.single_action_space.n), std=0.01)
-        self.critic = layer_init(nn.Linear(512, 1), std=1)
-
-    def get_value(self, x):
-        return self.critic(self.network(x / 255.0))
-
-    def get_action_and_value(self, x, action=None):
-        hidden = self.network(x / 255.0)
-        logits = self.actor(hidden)
-        probs = Categorical(logits=logits)
-        if action is None:
-            action = probs.sample()
-        return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
-    
-    
-
 
 def ensure_flat(x: torch.Tensor) -> torch.Tensor:
     """
@@ -600,8 +567,200 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
+
+
+class Random_Exploration_Agent(nn.Module):
+    def __init__(self,num_actions):
+        super().__init__()
+        self.num_actions = num_actions
+
+    def get_action(self, state):
+        return np.random.choice(self.num_actions, size = 1)[0]
+    def train(self, experiences):
+        return 0
+    
+
+class Two_Modes_ADEU_DQN():
+    def __init__(   self, 
+                    K, 
+                    num_actions, 
+                    num_channels, 
+                    learning_rate, 
+                    device, 
+                    buffer_size, 
+                    batch_size, 
+                    beta, 
+                    train_frequency, 
+                    target_update, 
+                    head_start, 
+                    gamma, 
+                    exploration_duration, 
+                    initial_tau, 
+                    final_tau, 
+                    epsilon_greedy, 
+                    cnn, 
+                    state_size,
+                    maximum_timesteps,
+                    starting_mode):
+        
+        self.exploitation_agent = DQN(
+                                        K, 
+                                        num_actions, 
+                                        num_channels, 
+                                        learning_rate, 
+                                        device, 
+                                        buffer_size, 
+                                        batch_size, 
+                                        beta, 
+                                        train_frequency, 
+                                        target_update, 
+                                        head_start, 
+                                        gamma, 
+                                        exploration_duration, 
+                                        initial_tau, 
+                                        final_tau, 
+                                        epsilon_greedy, 
+                                        cnn, 
+                                        state_size,
+                                        
+        )
+
+        self.exploitation_agent.opt = torch.optim.AdamW(self.exploitation_agent.policy_net.parameters(), lr=self.exploitation_agent.learning_rate)
+        self.exploration_agent = Random_Exploration_Agent(num_actions)
+        
+        self.maximum_timesteps = maximum_timesteps
+
+        self.k = 5
+        self.past_values = np.zeros([maximum_timesteps,] )
+        self.past_rewards = np.zeros([maximum_timesteps,])
+        self.previous_d_promises = np.zeros([maximum_timesteps,])
+        self.gamma = gamma
+        self.homeostasis_threshold = np.zeros([maximum_timesteps,]) # we inityiallize it to 0 since we would assume that the uncertainty for the first ever episode is high and we would like the threshold to be zero in order to explore
+        self.homeostasis_rho = 0.01
+        self.uncertainty = 0
+        self.episodes_with_no_evaluation = 1
+        self.starting_mode = starting_mode
+        self.device = device
+        self.reset()
+        
+
+    
+    def reset (self, ):
+        self.current_timestep = -1
+        self.past_values = np.zeros([self.maximum_timesteps,] )
+        self.past_rewards = np.zeros([self.maximum_timesteps,])
+        self.homeostasis_threshold = self.homeostasis()
+        self.episodes_with_no_evaluation+=1
     
     
+    def get_clear_action(self, state, return_value = False):
+        if not return_value:
+            return self.exploitation_agent.get_clear_action(state)
+        
+        state = torch.from_numpy(state).to(self.device)
+        with torch.no_grad():
+            qs = self.exploitation_agent.policy_net(x = state, k = 0).detach().cpu().numpy()
+        action = np.argmax(qs)
+        return action, qs[action]
+
+    def get_variance(self, return_q = None):
+        retval = self.uncertainty/self.episodes_with_no_evaluation
+        self.episodes_with_no_evaluation = 0
+        return retval, 0
+    
+    def update_values_rewards(self, values, rewards):
+        self.past_values[self.current_timestep, :] = values.detach().cpu().numpy()
+        self.past_rewards[self.current_timestep, :] = rewards
+        return
+
+
+
+    def get_action(self, state):
+        self.current_timestep+=1
+        exploitation_action, exploitation_value = self.get_clear_action(state, return_value=True)
+        uncertainty = self.calculate_uncertainty(exploitation_value, ) #uncertainty is (num_envs, 1)
+
+        
+
+        self.uncertainty += uncertainty
+        self.previous_d_promises[self.current_timestep] = uncertainty
+
+      
+
+
+        if uncertainty< self.homeostasis_threshold[self.current_timestep]:
+            #uncertainty is low, exploit
+            action = exploitation_action
+        else:
+            #the action in the next couple of lines is THE SAME ONE (but one is in torch)
+            action = self.exploration_agent.get_action(state)
+            
+
+
+        return action
+    
+    def calculate_uncertainty(self, value:np.array):
+
+        if self.current_timestep < self.k:
+            if self.starting_mode == 'exploration' :
+                return 1
+            return 0
+
+        v_t_minus_k = self.past_values[self.current_timestep - self.k] if (self.current_timestep - self.k) >= 0 \
+                                                                       else 0
+        r_t_minus_k = self.past_rewards[self.current_timestep - self.k : self.current_timestep ] if (self.current_timestep - self.k) >= 0 \
+                                                                       else 0
+        
+        s = (np.sum(np.array([self.gamma **i *r_t_minus_k[max(-i-1, -5)]  for i in range(r_t_minus_k.size)])))
+
+        D_promise = v_t_minus_k - s - (self.gamma**self.k)*np.squeeze(value)
+        D_promise = np.abs(D_promise)
+        return D_promise
+    
+    def homeostasis(self, ):
+
+        rho = self.homeostasis_rho
+        x_values = self.previous_d_promises
+        T = len(x_values)
+
+        # Initialize variables
+        x_bar = 0.0
+        x2_bar = 1.0
+        x_plus_bar = 1.0
+
+        y = np.zeros([T])
+
+        for t in range(T):
+            x_t = x_values[t]
+            tau = min(t + 1, 100 / rho)  # t starts at 0, so use (t+1)
+
+            # Update moving average and variance
+            x_bar = (1 - 1 / tau) * x_bar + (1 / tau) * x_t
+            x2_bar = (1 - 1 / tau) * x2_bar + (1 / tau) * (x_t - x_bar) ** 2
+
+            # Standardize and exponentiate
+            x_plus = np.exp((x_t - x_bar) / np.sqrt(x2_bar + 1e-8))  # small epsilon for stability
+
+            # Update transformed moving average
+            x_plus_bar = (1 - 1 / tau) * x_plus_bar + (1 / tau) * x_plus
+
+            # Sample from Bernoulli
+            p = np.minimum(1, rho * x_plus / (x_plus_bar + 1e-8))
+            y[t] = np.random.binomial(1, p)
+
+        return y
+    
+
+
+    def train(self, experiences):
+        self.exploitation_agent.train(experiences)
+        self.exploration_agent.train(experiences)
+        return 
+
+
+    def step(self, state, action, reward, next_state, done):
+        return self.exploitation_agent.step(state, action, reward, next_state, done)
+
 
 if __name__ == '__main__':
      
