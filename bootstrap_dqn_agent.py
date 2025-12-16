@@ -174,10 +174,11 @@ class BootDQN():
 
         loss = sum(cnt_losses)/self.K
         loss.backward()
-        for param in self.policy_net.core_net.parameters():
-            if param.grad is not None:
-                # divide grads in core
-                param.grad.data *=1.0/float(self.K)
+        if self.K  > 1:
+            for param in self.policy_net.core_net.parameters():
+                if param.grad is not None:
+                    # divide grads in core
+                    param.grad.data *=1.0/float(self.K)
         nn.utils.clip_grad_norm_(self.policy_net.parameters(), self.clip_gradient)
         self.opt.step()
         return np.mean(losses)
@@ -627,7 +628,8 @@ class Two_Modes_ADEU_DQN():
 
         self.exploitation_agent.opt = torch.optim.AdamW(self.exploitation_agent.policy_net.parameters(), lr=self.exploitation_agent.learning_rate)
         self.exploration_agent = Random_Exploration_Agent(num_actions)
-        
+        self.exploration = 0
+        self.exploitation = 0
         self.maximum_timesteps = maximum_timesteps
 
         self.k = 5
@@ -643,7 +645,13 @@ class Two_Modes_ADEU_DQN():
         self.device = device
         self.reset()
         
+    def explore_vs_exploit(self, ):
+        exploration = self.exploitation
+        exploitation = self.exploitation
 
+        self.exploitation = 0
+        self.exploration = 0
+        return exploration/(exploitation+ exploration + 1e-5)
     
     def reset (self, ):
         self.current_timestep = -1
@@ -688,12 +696,14 @@ class Two_Modes_ADEU_DQN():
       
 
 
-        if uncertainty< self.homeostasis_threshold[self.current_timestep]:
+        if self.homeostasis_threshold[self.current_timestep] < 0.5:
             #uncertainty is low, exploit
             action = exploitation_action
+            self.exploitation += 1
         else:
             #the action in the next couple of lines is THE SAME ONE (but one is in torch)
             action = self.exploration_agent.get_action(state)
+            self.exploration +=1
             
 
 
@@ -718,7 +728,12 @@ class Two_Modes_ADEU_DQN():
         return D_promise
     
     def homeostasis(self, ):
-
+        '''
+        Docstring for homeostasis
+        
+        It returns an array with ether 1s or 0s. 
+        1 means explore, otherwise exploit (similarly to epsilon greedy) 
+        '''
         rho = self.homeostasis_rho
         x_values = self.previous_d_promises
         T = len(x_values)
