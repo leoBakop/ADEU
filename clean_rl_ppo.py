@@ -173,7 +173,7 @@ def main(seed, code, dom):
         episodes_till_evaluate+=1
 
         if iteration%evaluation_every == 0:
-            cumulative_evaluation_reward = evaluate(agent, agent_params['env_id'], seed = seed, evaluation_episodes=1)
+            cumulative_evaluation_reward = evaluate(agent, agent_params['env_id'], seed = seed, evaluation_episodes=30)
            
             variance, q_mean = agent.get_variance()
             tradeoff = 0

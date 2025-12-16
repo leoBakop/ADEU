@@ -554,7 +554,8 @@ class Two_Modes_ADEU(nn.Module):
                                             device,
                                             head_start,
                                             )
-        
+        self.exploitation_agent.optimizer = optim.AdamW(self.exploitation_agent.network.parameters(), lr=self.exploitation_agent.learning_rate)
+
         self.exploration_agent = Random_Exploration_Agent(envs)
         self.n_envs = envs.num_envs
         self.current_timestep = -1

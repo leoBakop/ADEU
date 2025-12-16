@@ -156,7 +156,7 @@ def run(seed, agent:BootDQN | Two_Modes_ADEU_DQN, env:AtariEnv, horizon,code):
     for t in tqdm(range(horizon)):
         
         if t%evaluation_every == 0:
-            cumulative_evaluation_reward = evaluate(agent, domain, seed, evaluation_episodes=30)
+            cumulative_evaluation_reward = evaluate(agent, domain, seed, evaluation_episodes=0)
             return_q = (code == -3 ) or (code == 3) #in case of the adeu std or the Bootucb I would like also to get the mean q value among the training
             variance, q_mean = agent.get_variance(return_q)
             wandb.log({ 'Cumulative episodic reward':cumulative_evaluation_reward,
