@@ -53,7 +53,7 @@ class PPO_Agent(nn.Module):
         self.norm_adv = True
         self.clip_vloss = True
 
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate, eps=1e-5)
+        self.optimizer = optim.AdamW(self.parameters(), lr=learning_rate, eps=1e-5)
 
     def get_variance(self, ):
         return 0, 0
@@ -217,7 +217,7 @@ class PPO_RND_Agent:
         self.learning_rate = ppo_agent.learning_rate
         # combined optimizer: PPO parameters + predictor parameters (target is frozen)
         combined_parameters = list(self.ppo_agent.parameters()) + list(self.rnd.predictor.parameters())
-        self.optimizer = optim.Adam(combined_parameters, lr=self.ppo_agent.learning_rate, eps=1e-5)
+        self.optimizer = optim.AdamW(combined_parameters, lr=self.ppo_agent.learning_rate, eps=1e-5)
 
         # running stats for intrinsic rewards (target normalization)
         from gym.wrappers.normalize import RunningMeanStd
@@ -580,7 +580,7 @@ class Two_Modes_ADEU(nn.Module):
         explore = self.explore
         exploit = self.exploit
 
-        retval = explore - exploit
+        retval = explore/( exploit + exploit + 1e-5)
         self.explore = 0
         self.exploit = 0
         return retval
@@ -629,7 +629,7 @@ class Two_Modes_ADEU(nn.Module):
 
         for i in range(self.n_envs):
 
-            if uncertainty[i] < self.homeostasis_threshold[self.current_timestep, i]:
+            if self.homeostasis_threshold[self.current_timestep, i] < 0.5:
                 #uncertainty is low, exploit
                 actions.append(exploitation_action[i])
                 log_probs.append(log_prob[i])

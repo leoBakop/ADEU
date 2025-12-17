@@ -76,14 +76,14 @@ def main(seed, code, dom):
     agent_params ['batch_size'] = int(agent_params['num_envs'] * agent_params['num_steps'])
     agent_params["minibatch_size"] = int(agent_params['batch_size'] // agent_params['num_minibatches'])
     agent_params['num_iterations'] = agent_params['total_timesteps'] // agent_params['batch_size']
-    run_name = reverse_code(code)+f', seed {seed}'
+    run_name = reverse_code(code)+f',PPO seed {seed}'
 
     wandb_session(
         domain = agent_params['env_id'],
         rho = None,
         lr = agent_params['learning_rate'],
         name = run_name,
-        code = code,
+        code = code + 10,
         debug=False 
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

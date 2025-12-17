@@ -71,7 +71,7 @@ class BootDQN():
         self.target_update = target_update
         self.head_start = head_start
         self.steps = 0 #counts the total steps
-        self.opt = optim.Adam(self.policy_net.parameters(), lr=learning_rate)
+        self.opt = optim.AdamW(self.policy_net.parameters(), lr=learning_rate)
         self.current_head = np.random.choice(self.K, size = 1)[0]
         self.buffer = Ensemble_Buffer(buffer_size, batch_size, device, beta, K = self.K)
 

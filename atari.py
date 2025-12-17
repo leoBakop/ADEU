@@ -42,7 +42,7 @@ def main(domain,
          rho):
     #at first let's seed everything except the environment
     set_seed(seed)
-    debug = True
+    debug = False
     #environment
     horizon = int(20e6)
     #horizon = int(10e4)
