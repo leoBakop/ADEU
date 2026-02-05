@@ -28,4 +28,5 @@ To test the installation pleaserun a simple MuJoCo experiment:
 python3 test/test_mujoco.py     
 ```
 
+If you used the code, please cite our [Paper](https://arxiv.org/abs/2509.03219)
 
