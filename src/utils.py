@@ -163,3 +163,24 @@ def make_observation_franz_kitchen(observation):
     retval = np.concatenate([new_obs,achieved_goal,desired_goal])
     return retval
 
+
+
+
+def get_arguments_mujoco():
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Your script description here')
+    # Define hyperparameters as command-line arguments
+    parser.add_argument('--ade', action='store_true', default=True, help='Would you like to use Adaptive Exploration')
+    parser.add_argument('--rnd', action='store_true', default=False, help='Would you like to use the standrad RND')
+    parser.add_argument('--noisy_nets', action='store_true', default=False)
+    parser.add_argument('--mod_rnd', action='store_true', default=True, help='Heuristically modify the Uncertainty')
+    parser.add_argument('--UCB', action='store_true', default=False, help='Create a UCB agent')
+    parser.add_argument('--adeu_ensemble', action='store_true', default=False, help='Use the ensebmle method for measuring uncertainty')
+    parser.add_argument('--include_pos', action='store_true', default=False, help='Whether position of the agents should be included in the obs')
+    parser.add_argument('--per', action='store_true', default=False, help='Would you like to Use the prioritized Experience Replay Buffer')
+    parser.add_argument('--dom', type=str, default='Hopper-v5', help='In what domain would you like to the agent to be tested')
+    parser.add_argument('--steps', type=int, default=1000, help='what are the maximum timesteps per episode')
+    parser.add_argument('--rho', type=float, default=0.3, help='what are the maximum timesteps per episode')
+    
+    return parser

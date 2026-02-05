@@ -1,11 +1,13 @@
 import torch
 import numpy as np
 import matplotlib
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
-from td3_agent import TD3, UCB_TD3_Agent, TD3_Ensemble_ADEU
-from combined_agent import Pretrained_TD3_Agent
+from src.td3_agent import TD3, UCB_TD3_Agent, TD3_Ensemble_ADEU
 import os
 from copy import copy
 import gymnasium as gym
@@ -15,9 +17,9 @@ from gym.wrappers import RecordVideo
 from tqdm import tqdm
 import random
 from gymnasium.wrappers import TransformObservation
-from network import UNCERTAINTY
-from td3_evaluate import evaluate
-from utils import make_observation_franz_kitchen
+from src.network import UNCERTAINTY
+from src.td3_evaluate import evaluate
+from src.utils import make_observation_franz_kitchen
 import time
 KEEP_TRAJECTORY = False
 
@@ -79,11 +81,6 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
     label = label + " mod_rnd" if mod_rnd else label
     name = f'{label}, seed:{seed}'
     debug = False
-    
-
-    
-
-
 
     env = gym.make(domain, **kwargs)
 
@@ -135,7 +132,7 @@ def main(seed, horizon, timesteps, domain, ade, use_rnd, ucb, noisy_nets, comb, 
         agent = TD3_Ensemble_ADEU(agent_params = agent_params, N = N, lambda_parameter=lambda_parameter, beta = 1)
     elif not ucb:
         lambda_parameter = None
-        agent = (TD3(**agent_params) if not comb else Pretrained_TD3_Agent(**agent_params, timesteps = timesteps, horizon = horizon, pretraining = pretraining))
+        agent = TD3(**agent_params) 
         if use_rnd: agent.set_uncertainty(1)
     else:
         lambda_parameter = 10 #it was 10
@@ -432,7 +429,8 @@ if __name__ == '__main__':
                                            per=per, 
                                            mod_rnd=mod_rnd, 
                                            adeu_ensemble=adeu_ensemble,
-                                           rho = rho)
+                                           rho = rho
+    )
     print(f"{domain} + code:{code}")
 
     for s in range(seeds):

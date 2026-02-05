@@ -1,10 +1,10 @@
 import torch
 import numpy as np
-from td3_agent import TD3
+from src.td3_agent import TD3
 import gymnasium as gym
 import wandb
 from gym.wrappers import RecordVideo
-from utils import make_observation_franz_kitchen
+from src.utils import make_observation_franz_kitchen
 import os
 
 

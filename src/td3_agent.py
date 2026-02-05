@@ -3,8 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from replay_buffer import ReplayBuffer, Priorized_Experience_Replay
-import network
+from src.replay_buffer import ReplayBuffer, Priorized_Experience_Replay
+import src.network as network
 from torch.distributions import MultivariateNormal
 import welford
 from gym.wrappers.normalize import RunningMeanStd
