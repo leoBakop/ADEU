@@ -1,9 +1,0 @@
-# Hashes of file build rules.
-e8ccb6b3b4206f80ca72c626d26de626 catch/src/catch-stamp/catch-build
-459ecee16c0c9932502cf1923add2161 catch/src/catch-stamp/catch-configure
-b26cb30390a09043041cb2c55e0b18ad catch/src/catch-stamp/catch-download
-271d2fd583bdf2207176f147b8b76851 catch/src/catch-stamp/catch-install
-cbd8157602dab784b50914cea9427500 catch/src/catch-stamp/catch-mkdir
-cab5142528b7fc95588cdf4e81e6de5c catch/src/catch-stamp/catch-patch
-fc0eca39fbb7a2b427ebc138586df423 tests/CMakeFiles/catch
-b3d477beb0cea8440aaa9de173171c0e tests/CMakeFiles/catch-complete
