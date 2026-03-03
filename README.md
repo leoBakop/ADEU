@@ -30,3 +30,6 @@ python3 test/test_mujoco.py
 
 If you used the code, please cite our [Paper](https://arxiv.org/abs/2509.03219)
 
+The research described in this paper was carried out within the framework of
+the National Recovery and Resilience Plan Greece 2.0, funded by the European Union - NextGenerationEU (Implementation Body: HFRI. Project name:
+DEEP-REBAYES. HFRI Project Number 15430).
