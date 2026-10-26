@@ -88,7 +88,18 @@
     <h2><span class="num">01</span>Abstract</h2>
     <div class="tldr"><b>TL;DR.</b> Explore where you are uncertain, exploit where you are not — and switch between the two <i>within the same episode</i>. ADEU turns any uncertainty measure into a principled switch.</div>
     <!-- TODO: replace this paragraph with the official abstract from the paper if you prefer the exact wording -->
-    <p>Adaptive exploration methods let an agent alternate between exploring and exploiting while it learns a complex policy. The key question is <i>when</i> to make that switch, and it matters most in domains that demand long, intricate sequences of actions. We present ADEU, a generic adaptive exploration framework that uses uncertainty to decide this in a principled way. ADEU includes previous adaptive exploration approaches as special cases, and it can be paired with any uncertainty-measuring mechanism — for example those used in intrinsic motivation or in epistemic-uncertainty-based exploration. Experiments show that instances of the framework outperform standard exploration strategies across several environments, and we discuss its potential for safety-critical applications. Our code is publicly available.</p>
+    <p>Adaptive exploration methods learn complex policies via alternating between exploration and exploitation. An important question
+for such methods is to determine the appropriate moment to switch
+between exploration and exploitation and vice versa. This is critical
+in domains that require the learning of long and complex sequences
+of actions. In this work, we present a generic adaptive exploration
+framework that employs uncertainty to address this important issue
+in a principled manner. Our framework includes previous adaptive
+exploration approaches as special cases. Moreover, it can incorporate any uncertainty-measuring mechanism of choice, such as
+mechanisms used in intrinsic motivation, or epistemic uncertaintybased exploration methods; and is experimentally shown to give
+rise to adaptive exploration strategies that outperform standard
+ones across several environments. Moreover, we showcase its potential for utilization in safety-critical domains. The code for this work
+can be found at https://github.com/leoBakop/adaptive_exploration</p>
   </div>
 </section>
 
