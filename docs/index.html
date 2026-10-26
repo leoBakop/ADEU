@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADEU — Uncertainty-Driven Adaptive Exploration</title>
+  <meta name="description" content="ADEU: a general framework that uses uncertainty to decide when a reinforcement learning agent should explore and when it should exploit. AAMAS 2026.">
+
+  <!-- Social cards -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="A Novel Framework for Uncertainty-Driven Adaptive Exploration (ADEU)">
+  <meta property="og:description" content="Uncertainty decides when to explore and when to trust what the agent has learned. AAMAS 2026.">
+  <meta property="og:image" content="assets/img/deepsea-results.png">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- Google Scholar indexing -->
+  <meta name="citation_title" content="A Novel Framework for Uncertainty-Driven Adaptive Exploration">
+  <meta name="citation_author" content="Bakopoulos, Leonidas">
+  <meta name="citation_author" content="Chalkiadakis, Georgios">
+  <meta name="citation_publication_date" content="2026">
+  <meta name="citation_conference_title" content="Proceedings of the 25th International Conference on Autonomous Agents and Multiagent Systems (AAMAS 2026)">
+  <meta name="citation_firstpage" content="310">
+  <meta name="citation_lastpage" content="318">
+  <meta name="citation_doi" content="10.65109/HQII4250">
+  <meta name="citation_pdf_url" content="https://arxiv.org/pdf/2509.03219">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23a2401d'/><text x='32' y='43' font-size='30' font-family='Georgia' fill='white' text-anchor='middle'>A</text></svg>">
+</head>
+<body data-root="">
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="./">ADE<span>U</span></a>
+    <ul>
+      <li class="hide-sm"><a href="#abstract">Abstract</a></li>
+      <li><a href="#framework">Framework</a></li>
+      <li class="hide-sm"><a href="#theory">Theory</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#next">Next</a></li>
+      <li><a href="#citation">Cite</a></li>
+      <li><a href="research/">Research line</a></li>
+      <li><a href="https://leobakop.github.io/">← Leonidas Bakopoulos</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>A Novel Framework for Uncertainty-Driven Adaptive Exploration</h1>
+    <p class="acronym"><b>ADEU</b> — <b>A</b>daptive <b>E</b>xploration via <b>U</b>ncertainty</p>
+    <p class="authors">
+      <a href="https://leobakop.github.io/">Leonidas Bakopoulos</a> &nbsp;&amp;&nbsp;
+      <a href="mailto:gchalkiadakis@tuc.gr">Georgios Chalkiadakis</a>
+    </p>
+    <p class="affil">MAs-ML Lab · Technical University of Crete, Chania, Greece</p>
+
+    <div class="links">
+      <a class="btn" data-link="arxiv" href="https://arxiv.org/abs/2509.03219">
+        <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5"/></svg>arXiv</a>
+      <a class="btn" data-link="aamasPdf" href="https://ifaamas.org/Proceedings/aamas2026/pdfs/HQII4250.pdf">
+        <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM8 13h8v2H8zm0 4h8v2H8z"/></svg>Paper (PDF)</a>
+      <a class="btn" data-link="code" href="https://github.com/leoBakop/ADEU">
+        <svg viewBox="0 0 24 24"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>Code</a>
+      <a class="btn" data-link="slides" href="assets/files/ADEU_AAMAS2026_slides.pptx" download>
+        <svg viewBox="0 0 24 24"><path d="M11 3h2v10l3.5-3.5 1.4 1.4L12 16.8 6.1 10.9l1.4-1.4L11 13zM4 19h16v2H4z"/></svg>Slides (.pptx)</a>
+      <a class="btn ghost" data-link="doi" href="https://doi.org/10.65109/HQII4250">
+        <svg viewBox="0 0 24 24"><path d="M10.6 13.4a1 1 0 0 1 0-1.4l3.5-3.5a3 3 0 1 1 4.2 4.2l-2 2-1.4-1.4 2-2a1 1 0 1 0-1.4-1.4L12 13.4a1 1 0 0 1-1.4 0zM13.4 10.6a1 1 0 0 1 0 1.4l-3.5 3.5a3 3 0 1 1-4.2-4.2l2-2 1.4 1.4-2 2a1 1 0 1 0 1.4 1.4L12 10.6a1 1 0 0 1 1.4 0z"/></svg>DOI</a>
+    </div>
+    <p class="doi-line">DOI: <a data-link="doi" href="https://doi.org/10.65109/HQII4250">10.65109/HQII4250</a> · <a data-link="acm" href="https://dl.acm.org/doi/abs/10.65109/HQII4250">ACM Digital Library</a></p>
+
+    <div class="logos">
+      <img src="assets/img/tuc.png" alt="Technical University of Crete">
+      <img src="assets/img/aamas2026.png" alt="AAMAS 2026, Paphos, Cyprus">
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ================= ABSTRACT ================= -->
+<section id="abstract">
+  <div class="wrap narrow">
+    <h2><span class="num">01</span>Abstract</h2>
+    <div class="tldr"><b>TL;DR.</b> Explore where you are uncertain, exploit where you are not — and switch between the two <i>within the same episode</i>. ADEU turns any uncertainty measure into a principled switch.</div>
+    <!-- TODO: replace this paragraph with the official abstract from the paper if you prefer the exact wording -->
+    <p>Adaptive exploration methods let an agent alternate between exploring and exploiting while it learns a complex policy. The key question is <i>when</i> to make that switch, and it matters most in domains that demand long, intricate sequences of actions. We present ADEU, a generic adaptive exploration framework that uses uncertainty to decide this in a principled way. ADEU includes previous adaptive exploration approaches as special cases, and it can be paired with any uncertainty-measuring mechanism — for example those used in intrinsic motivation or in epistemic-uncertainty-based exploration. Experiments show that instances of the framework outperform standard exploration strategies across several environments, and we discuss its potential for safety-critical applications. Our code is publicly available.</p>
+  </div>
+</section>
+
+<!-- ================= MOTIVATION ================= -->
+<section id="motivation">
+  <div class="wrap">
+    <h2><span class="num">02</span>Why adaptive exploration?</h2>
+    <div class="flow">
+      <div><small>01</small>In learning environments, efficient exploration is the key.</div>
+      <div><small>02</small>A common approach: keep pushing the agent to explore.</div>
+      <div><small>03</small>The real question: when to explore, and when to trust the knowledge already gained?</div>
+    </div>
+
+    <div class="split" style="margin-top:36px">
+      <div>
+        <h3>Exploration in a nutshell</h3>
+        <p>Picture a long, narrow path across water toward a distant goal. An agent that always picks the action maximising uncertainty keeps stepping off the path — and drowns.</p>
+        <p>An <b>adaptive</b> agent behaves differently: where its uncertainty is <b>low</b>, it <b>exploits</b> what it knows and stays on the path; where uncertainty is <b>high</b>, it <b>explores</b>. That alternation is what lets it reach the goal.</p>
+      </div>
+      <figure>
+        <img src="assets/img/motivation-grid.png" alt="Grid world: a narrow path across water leading to a goal" style="max-width:min(100%,300px)">
+        <figcaption>Low uncertainty → exploit. High uncertainty → explore.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FRAMEWORK ================= -->
+<section id="framework">
+  <div class="wrap">
+    <h2><span class="num">03</span>The ADEU framework</h2>
+    <p class="lead">At each state, ADEU samples its action from a distribution centred on the learned policy, whose spread is set by how uncertain the agent is about that state.</p>
+    <div class="equation" id="eq">a \sim \mathcal{D}\big(\pi(s),\; g(f(s))\big)</div>
+    <div class="legend-grid">
+      <div><b>𝒟</b> — the action distribution the agent samples from</div>
+      <div><b>π(s)</b> — the policy at state <i>s</i></div>
+      <div><b>f(s)</b> — any mechanism that measures uncertainty in state <i>s</i></div>
+      <div><b>g(·)</b> — a normalisation function mapping uncertainty to a degree of exploration</div>
+    </div>
+
+    <h3>One framework, many methods</h3>
+    <div class="cards">
+      <div class="card"><h4>Uses any uncertainty measure</h4><p><i>f(s)</i> can quantify novelty as in intrinsic motivation, or epistemic uncertainty as in uncertainty-driven exploration.</p></div>
+      <div class="card"><h4>Subsumes prior work</h4><p>Existing adaptive exploration methods appear as special cases — with a suitably sophisticated <i>f</i>, ADEU emulates them.</p></div>
+      <div class="card"><h4>Gives rise to new methods</h4><p>Plugging new mechanisms into <i>f</i> and <i>g</i> yields new adaptive explorers, such as ADEU + RND and ADEU + UCB.</p></div>
+      <div class="card"><h4>Within-episode switching</h4><p>ADEU alternates between exploration and exploitation inside a single episode, not only across training.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= THEORY ================= -->
+<section id="theory">
+  <div class="wrap">
+    <h2><span class="num">04</span>Theoretical guarantees</h2>
+    <div class="split">
+      <div>
+        <h3 style="margin-top:0">Increasing-Reward Single-Agent Games (IR-SAGs)</h3>
+        <p>A general class of games — covering sorting, ordering and searching for a sole trajectory — in which the reward motivates the agent to visit the truly high-value states. In every state <i>s</i> there is a unique action <i>b</i> that maximises reward and leads to the state <i>s*</i>, which offers more reward than anything reachable elsewhere.</p>
+      </div>
+      <figure>
+        <img src="assets/img/irsag.png" alt="Illustration of an IR-SAG on a grid with states s, s-prime and s-star">
+        <figcaption>From state <i>s</i>, the action <i>b</i> leads to <i>s*</i>.</figcaption>
+      </figure>
+    </div>
+
+    <div style="margin-top:28px">
+      <div class="theorem" data-n="1">An agent acts optimally in an IR-SAG <b>if and only if</b> it selects action <i>b</i> — no added exploration is required.</div>
+      <div class="theorem" data-n="2">An ADEU agent that has executed action <i>b</i> in a state <i>s</i> reduces its degree of exploration in <i>s</i> in proportion to the effectiveness of <i>f</i>.</div>
+    </div>
+
+    <h3>Further guarantees</h3>
+    <div class="cards">
+      <div class="card"><h4>Efficient exploration</h4><p>Assuming an efficient <i>f(s)</i>, efficient exploration is guaranteed in sparse IR-SAGs (via hyper-states and hyper-actions) and in stochastic IR-SAGs.</p></div>
+      <div class="card"><h4>Probabilistic bounds</h4><p>For specific choices of <i>f(s)</i>, probabilistic bounds are computed in tabular domains such as DeepSea and Frozen Lake.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= RESULTS ================= -->
+<section id="results">
+  <div class="wrap">
+    <h2><span class="num">05</span>Experimental evaluation</h2>
+
+    <div class="split rev">
+      <figure>
+        <video src="assets/video/mujoco-humanoid.mp4" poster="assets/img/mujoco-poster.jpg" autoplay muted loop playsinline style="max-width:min(100%,360px)"></video>
+        <figcaption>MuJoCo Humanoid.</figcaption>
+      </figure>
+      <div>
+        <h3 style="margin-top:0">Demanding control tasks — MuJoCo</h3>
+        <p>We test two effective ADEU instances:</p>
+        <ul>
+          <li><b>ADEU + IM</b> — <i>f(s)</i> is the novelty mechanism of intrinsic motivation (Random Network Distillation; Burda et al.).</li>
+          <li><b>ADEU + UCB</b> — <i>f(s)</i> is the UCB criterion over Q-ensembles that guides agents toward highly uncertain states (Chen et al.).</li>
+        </ul>
+        <p>Both are compared with a naïve ADEU instance and with UCB, intrinsic motivation and Noisy Nets used as standard (non-adaptive) exploration.</p>
+      </div>
+    </div>
+
+    <h3>Results on MuJoCo</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Domain</th><th class="ours">ADEU + IM</th><th class="ours">ADEU + UCB</th><th class="ours">Naïve ADEU</th><th>UCB</th><th>IM</th><th>Noisy Nets</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>Walker2d</th><td class="ours">745 – 947</td><td class="ours">413 – 500</td><td class="ours">564 – 726</td><td>355 – 397</td><td>1 – 23</td><td>519 – 657</td></tr>
+          <tr><th>Hopper</th><td class="ours">733 – 1167</td><td class="ours">293 – 514</td><td class="ours">376 – 631</td><td>245 – 422</td><td>10 – 35</td><td>429 – 766</td></tr>
+          <tr><th>Swimmer</th><td class="ours">52 – 62</td><td class="ours">36 – 39</td><td class="ours">40 – 46</td><td>32 – 36</td><td>−3 – −2</td><td>30 – 35</td></tr>
+          <tr><th>Ant</th><td class="ours">1072 – 1341</td><td class="ours">1134 – 1500</td><td class="ours">345 – 980</td><td>585 – 790</td><td>−2658 – 980</td><td>364 – 981</td></tr>
+          <tr><th>Humanoid</th><td class="ours">313 – 345</td><td class="ours">512 – 658</td><td class="ours">86 – 132</td><td>89 – 149</td><td>85 – 132</td><td>75 – 88</td></tr>
+          <tr><th>HumanoidStandup</th><td class="ours">73895 – 79978</td><td class="ours">72978 – 80139</td><td class="ours">61511 – 64490</td><td>54928 – 56527</td><td>55211 – 56057</td><td>62152 – 63645</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Return intervals as reported in the AAMAS 2026 presentation; shaded columns are ADEU instances. See the paper for the full experimental protocol.</p>
+
+    <div class="split" style="margin-top:40px">
+      <div>
+        <h3 style="margin-top:0">Deep exploration — DeepSea</h3>
+        <p>DeepSea is a domain that requires deep exploration: the reward sits at the end of a long, specific sequence of moves on an <i>N × N</i> grid.</p>
+        <p>Here we test <b>εz-ADEU</b>, an ADEU instance that emulates an earlier adaptive exploration method, temporally-extended ε-greedy (εz-greedy; Dabney et al.) — showing that prior adaptive explorers fit inside the framework.</p>
+      </div>
+      <figure>
+        <img src="assets/img/deepsea-domain.png" alt="The DeepSea domain: an N by N grid with the treasure at the bottom right" style="max-width:min(100%,280px)">
+        <figcaption>The DeepSea domain.</figcaption>
+      </figure>
+    </div>
+    <figure style="margin-top:24px">
+      <img src="assets/img/deepsea-results.png" alt="Timesteps required to solve DeepSea as the grid size N grows, for DQN, BDQN, UCB and ez-ADEU" style="max-width:min(100%,760px)">
+      <figcaption>Timesteps required to solve DeepSea on an N × N grid, as N grows.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= CONCLUSIONS + NEXT ================= -->
+<section id="conclusions">
+  <div class="wrap">
+    <h2><span class="num">06</span>Conclusions</h2>
+    <div class="cards">
+      <div class="card"><h4>A generic framework</h4><p>A general adaptive exploration framework that works with any uncertainty measure.</p></div>
+      <div class="card"><h4>Principled switching</h4><p>Decides when to alternate between exploration and exploitation, and back again.</p></div>
+      <div class="card"><h4>Guarantees</h4><p>Optimality results in a general class of games (IR-SAGs).</p></div>
+      <div class="card"><h4>Performance</h4><p>Outperforms standard exploration methods on MuJoCo and DeepSea.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="next">
+  <div class="wrap">
+    <h2><span class="num">07</span>What comes next</h2>
+    <p class="lead">ADEU is the first step of a research line. A central next direction is <b>safety</b>: interpreting safe exploration as an adaptive one.</p>
+    <ol class="directions">
+      <li>Test background knowledge</li>
+      <li>Escape sub-optimal knowledge</li>
+      <li class="highlight"><b>Interpret safe exploration as an adaptive one</b></li>
+      <li>Guide exploration by modifying higher moments of the action distribution</li>
+      <li>Multiagent exploration</li>
+    </ol>
+    <h3>Follow-up work</h3>
+    <!-- Filled from assets/js/data.js → PROJECTS -->
+    <div class="cards" id="next-cards" data-exclude="adeu"></div>
+    <p class="note" style="margin-top:16px">See the full <a href="research/">research line</a>.</p>
+  </div>
+</section>
+
+<section id="news-section">
+  <div class="wrap narrow">
+    <h2><span class="num">08</span>News</h2>
+    <ul class="news" id="news-list"></ul>
+  </div>
+</section>
+
+<!-- ================= CITATION ================= -->
+<section id="citation">
+  <div class="wrap narrow">
+    <h2><span class="num">09</span>Citation</h2>
+    <p>If you use ADEU or its code, please cite:</p>
+    <div class="bib">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true">AAMAS 2026</button>
+        <button role="tab" aria-selected="false">arXiv</button>
+      </div>
+      <button class="copy" type="button">Copy</button>
+<pre>@inproceedings{bakopoulos2026adeu,
+  title     = {A Novel Framework for Uncertainty-Driven Adaptive Exploration},
+  author    = {Bakopoulos, Leonidas and Chalkiadakis, Georgios},
+  booktitle = {Proceedings of the 25th International Conference on
+               Autonomous Agents and Multiagent Systems (AAMAS 2026)},
+  pages     = {310--318},
+  year      = {2026},
+  address   = {Paphos, Cyprus},
+  publisher = {IFAAMAS},
+  doi       = {10.65109/HQII4250}
+}</pre>
+<pre hidden>@article{bakopoulos2025adeu,
+  title   = {A Novel Framework for Uncertainty-Driven Adaptive Exploration},
+  author  = {Bakopoulos, Leonidas and Chalkiadakis, Georgios},
+  journal = {arXiv preprint arXiv:2509.03219},
+  year    = {2025},
+  url     = {https://arxiv.org/abs/2509.03219}
+}</pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>Acknowledgements.</b> The research described in this paper was carried out within the framework of the National Recovery and Resilience Plan Greece 2.0, funded by the European Union – NextGenerationEU (Implementation Body: HFRI. Project name: DEEP-REBAYES. HFRI Project Number 15430).</p>
+    <p>Contact: <a href="mailto:lbakopoulos@tuc.gr">lbakopoulos@tuc.gr</a> · <a href="mailto:gchalkiadakis@tuc.gr">gchalkiadakis@tuc.gr</a><br>
+       © <span id="year">2026</span> <a href="https://leobakop.github.io/">L. Bakopoulos</a> &amp; G. Chalkiadakis · <a data-link="code" href="https://github.com/leoBakop/ADEU">Code on GitHub</a></p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script>
+  // Render the key equation (falls back to plain text if KaTeX is unavailable)
+  (function () {
+    var el = document.getElementById("eq");
+    if (window.katex) katex.render(el.textContent, el, { displayMode: true, throwOnError: false });
+    else el.textContent = "a ~ D( π(s), g(f(s)) )";
+  })();
+</script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

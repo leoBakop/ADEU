@@ -1,0 +1,90 @@
+<!doctype html>
+<!--
+  TEMPLATE FOR A NEW PROJECT PAGE (e.g. the safety extension of ADEU)
+
+  1. Copy this file to   projects/<your-id>/index.html   (e.g. projects/safe-adeu/index.html)
+  2. Replace every  {{ ... }}  placeholder.
+  3. Put figures in      projects/<your-id>/img/   and slides in assets/files/
+  4. In assets/js/data.js, set  page: "projects/<your-id>/index.html"  on the matching PROJECTS entry
+     and change its status to "published" when the paper is out.
+  Paths below assume the page sits two folders deep (projects/<id>/), hence data-root="../../".
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ SHORT NAME }} — {{ Full title }}</title>
+  <meta name="description" content="{{ One-sentence summary }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body data-root="../../">
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="../../">ADE<span>U</span></a>
+    <ul>
+      <li><a href="#abstract">Abstract</a></li>
+      <li><a href="#method">Method</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#citation">Cite</a></li>
+      <li><a href="../../research/">Research line</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="venue-badge">{{ VENUE YEAR }}</div>
+    <h1>{{ Full title }}</h1>
+    <p class="authors"><a href="https://leobakop.github.io/">Leonidas Bakopoulos</a> &nbsp;&amp;&nbsp; <a href="mailto:gchalkiadakis@tuc.gr">Georgios Chalkiadakis</a></p>
+    <p class="affil">MAs-ML Lab · Technical University of Crete</p>
+    <div class="links">
+      <a class="btn" href="{{ arXiv URL }}">arXiv</a>
+      <a class="btn" href="{{ GitHub URL }}">Code</a>
+      <a class="btn" href="../../assets/files/{{ slides file }}" download>Slides</a>
+      <a class="btn ghost" href="https://doi.org/{{ DOI }}">DOI</a>
+    </div>
+    <p class="doi-line">Builds on <a href="../../">ADEU (AAMAS 2026)</a></p>
+  </div>
+</header>
+
+<main>
+  <section id="abstract"><div class="wrap narrow">
+    <h2><span class="num">01</span>Abstract</h2>
+    <div class="tldr"><b>TL;DR.</b> {{ one line }}</div>
+    <p>{{ abstract }}</p>
+  </div></section>
+
+  <section id="method"><div class="wrap">
+    <h2><span class="num">02</span>Method</h2>
+    <p>{{ text }}</p>
+    <!-- <figure><img src="img/overview.png" alt=""><figcaption></figcaption></figure> -->
+  </div></section>
+
+  <section id="results"><div class="wrap">
+    <h2><span class="num">03</span>Results</h2>
+    <p>{{ text, tables (copy the table markup from the ADEU page), figures }}</p>
+  </div></section>
+
+  <section id="citation"><div class="wrap narrow">
+    <h2><span class="num">04</span>Citation</h2>
+    <div class="bib">
+      <div class="tabs"><button aria-selected="true">BibTeX</button></div>
+      <button class="copy" type="button">Copy</button>
+<pre>{{ bibtex }}</pre>
+    </div>
+  </div></section>
+</main>
+
+<footer><div class="wrap">
+  <p>© L. Bakopoulos &amp; G. Chalkiadakis</p>
+</div></footer>
+
+<script src="../../assets/js/data.js"></script>
+<script src="../../assets/js/main.js"></script>
+</body>
+</html>
