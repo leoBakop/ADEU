@@ -1,8 +1,6 @@
 # ADEU — project website
 
-Static website for **"A Novel Framework for Uncertainty-Driven Adaptive Exploration"**
-(L. Bakopoulos & G. Chalkiadakis, AAMAS 2026). Plain HTML/CSS/JS — no build step, no Jekyll —
-so it runs on GitHub Pages exactly like `worldmodels.github.io` and `ageorgara.github.io`.
+
 
 ```
 index.html                 ADEU paper page (home)
@@ -36,8 +34,3 @@ All paths are relative, so the site also works if it is moved elsewhere.
   `page: "projects/<id>/index.html"` on its `PROJECTS` entry.
 * **Colours / fonts** → variables at the top of `assets/css/style.css`.
 
-## Notes
-
-* The abstract on the home page is written in summary form — paste the official abstract
-  in place of it if you prefer the exact wording (look for the `TODO` comment in `index.html`).
-* The slides file is ~13 MB, well within GitHub's limits.
